@@ -1,0 +1,476 @@
+// Prisma Schema for Vesla ERP
+// Database: PostgreSQL
+// Double-Entry Bookkeeping System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MANAGEMENT & AUTHENTICATION
+// ============================================
+
+enum UserRole {
+  ADMIN
+  ACCOUNTANT
+  MANAGER
+  VIEWER
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  role      UserRole @default(VIEWER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  createdInvoices      Invoice[]         @relation("InvoiceCreatedBy")
+  createdPayments      Payment[]         @relation("PaymentCreatedBy")
+  createdTransactions  Transaction[]     @relation("TransactionCreatedBy")
+  auditLogs            AuditLog[]
+  blacklistedTokens    TokenBlacklist[]
+
+  @@map("users")
+}
+
+// ============================================
+// COMPANY & ORGANIZATION
+// ============================================
+
+model Company {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  address     String?
+  phone       String?
+  email       String?
+  taxNumber   String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  accounts     Account[]
+  invoices     Invoice[]
+  payments     Payment[]
+  transactions Transaction[]
+  customers    Customer[]
+  vehicles     Vehicle[]
+  bookings     Booking[]
+
+  @@map("companies")
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  companyId String
+  code      String
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  taxNumber String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  company  Company   @relation(fields: [companyId], references: [id])
+  invoices Invoice[]
+  payments Payment[]
+  bookings Booking[]
+
+  @@unique([companyId, code])
+  @@map("customers")
+}
+
+// ============================================
+// CHART OF ACCOUNTS
+// ============================================
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum AccountSubType {
+  // Assets
+  CASH
+  BANK
+  ACCOUNTS_RECEIVABLE
+  INVENTORY
+  FIXED_ASSET
+  OTHER_ASSET
+
+  // Liabilities
+  ACCOUNTS_PAYABLE
+  SALARIES_PAYABLE
+  TAX_PAYABLE
+  LOAN
+  OTHER_LIABILITY
+
+  // Equity
+  CAPITAL
+  RETAINED_EARNINGS
+  DRAWINGS
+
+  // Revenue
+  SALES
+  SERVICE_REVENUE
+  OTHER_REVENUE
+
+  // Expenses
+  COST_OF_GOODS_SOLD
+  SALARY_EXPENSE
+  RENT_EXPENSE
+  UTILITY_EXPENSE
+  OTHER_EXPENSE
+}
+
+model Account {
+  id          String         @id @default(uuid())
+  companyId   String
+  code        String
+  name        String
+  type        AccountType
+  subType     AccountSubType
+  description String?
+  parentId    String?
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  // Relations
+  company          Company           @relation(fields: [companyId], references: [id])
+  parent           Account?          @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children         Account[]         @relation("AccountHierarchy")
+  transactionLines TransactionLine[]
+
+  @@unique([companyId, code])
+  @@map("accounts")
+}
+
+// ============================================
+// DOUBLE-ENTRY BOOKKEEPING CORE
+// ============================================
+
+enum TransactionType {
+  JOURNAL_VOUCHER
+  INVOICE
+  PAYMENT
+  RECEIPT
+  CONTRA
+  ADJUSTMENT
+}
+
+enum TransactionStatus {
+  DRAFT
+  POSTED
+  VOID
+}
+
+model Transaction {
+  id          String            @id @default(uuid())
+  companyId   String
+  type        TransactionType
+  status      TransactionStatus @default(DRAFT)
+  number      String            // JV-2025-001, INV-2025-001, etc.
+  date        DateTime
+  description String?
+  reference   String?           // External reference
+  createdById String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  postedAt    DateTime?
+
+  // Relations
+  company Company           @relation(fields: [companyId], references: [id])
+  createdBy User            @relation("TransactionCreatedBy", fields: [createdById], references: [id])
+  lines     TransactionLine[]
+  invoice   Invoice?
+  payment   Payment?
+
+  @@unique([companyId, number])
+  @@index([companyId, type, date])
+  @@index([createdById])  // Added index for user's transactions
+  @@index([date])         // Added index for date-based queries
+  @@map("transactions")
+}
+
+model TransactionLine {
+  id            String   @id @default(uuid())
+  transactionId String
+  accountId     String
+  description   String?
+  debit         Decimal  @default(0) @db.Decimal(15, 2)
+  credit        Decimal  @default(0) @db.Decimal(15, 2)
+  lineNumber    Int
+  createdAt     DateTime @default(now())
+
+  // Relations
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  account     Account     @relation(fields: [accountId], references: [id])
+
+  @@index([transactionId, lineNumber])
+  @@map("transaction_lines")
+}
+
+// ============================================
+// INVOICES
+// ============================================
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  VOID
+}
+
+model Invoice {
+  id             String        @id @default(uuid())
+  companyId      String
+  customerId     String
+  transactionId  String        @unique
+  invoiceNumber  String
+  invoiceDate    DateTime
+  dueDate        DateTime
+  status         InvoiceStatus @default(DRAFT)
+  subtotal       Decimal       @db.Decimal(15, 2)
+  taxAmount      Decimal       @default(0) @db.Decimal(15, 2)
+  totalAmount    Decimal       @db.Decimal(15, 2)
+  paidAmount     Decimal       @default(0) @db.Decimal(15, 2)
+  balanceAmount  Decimal       @db.Decimal(15, 2)
+  notes          String?
+  createdById    String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relations
+  company     Company       @relation(fields: [companyId], references: [id])
+  customer    Customer      @relation(fields: [customerId], references: [id])
+  transaction Transaction   @relation(fields: [transactionId], references: [id])
+  createdBy   User          @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  items       InvoiceItem[]
+  payments    Payment[]
+  booking     Booking?
+
+  @@unique([companyId, invoiceNumber])
+  @@index([companyId, customerId, status])
+  @@index([invoiceDate])  // Added index for date-based queries
+  @@index([dueDate])      // Added index for due date queries
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String   @id @default(uuid())
+  invoiceId   String
+  description String
+  quantity    Decimal  @db.Decimal(15, 2)
+  unitPrice   Decimal  @db.Decimal(15, 2)
+  amount      Decimal  @db.Decimal(15, 2)
+  lineNumber  Int
+  createdAt   DateTime @default(now())
+
+  // Relations
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId, lineNumber])
+  @@map("invoice_items")
+}
+
+// ============================================
+// PAYMENTS
+// ============================================
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  CREDIT_CARD
+  OTHER
+}
+
+enum PaymentStatus {
+  DRAFT
+  POSTED
+  RECONCILED
+  VOID
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  companyId      String
+  customerId     String?
+  invoiceId      String?
+  transactionId  String        @unique
+  paymentNumber  String
+  paymentDate    DateTime
+  amount         Decimal       @db.Decimal(15, 2)
+  method         PaymentMethod
+  status         PaymentStatus @default(DRAFT)
+  reference      String?       // Cheque number, transaction ID, etc.
+  notes          String?
+  createdById    String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relations
+  company     Company     @relation(fields: [companyId], references: [id])
+  customer    Customer?   @relation(fields: [customerId], references: [id])
+  invoice     Invoice?    @relation(fields: [invoiceId], references: [id])
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+  createdBy   User        @relation("PaymentCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([companyId, paymentNumber])
+  @@index([companyId, customerId, status])
+  @@index([paymentDate])  // Added index for date-based queries
+  @@map("payments")
+}
+
+// ============================================
+// AUDIT & LOGGING
+// ============================================
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  POST_TRANSACTION
+  VOID_TRANSACTION
+}
+
+model AuditLog {
+  id        String      @id @default(uuid())
+  userId    String
+  action    AuditAction
+  entity    String      // Table name
+  entityId  String      // Record ID
+  oldValue  Json?
+  newValue  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime    @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([entity, entityId])
+  @@index([createdAt])  // Added standalone index for time-based queries
+  @@map("audit_logs")
+}
+
+// ============================================
+// TOKEN BLACKLIST (for JWT revocation)
+// ============================================
+
+model TokenBlacklist {
+  id        String   @id @default(uuid())
+  token     String   @unique  // The JWT token to blacklist
+  userId    String             // User who owned this token
+  expiresAt DateTime           // When the token would have expired naturally
+  reason    String?            // Why the token was blacklisted (logout, user deactivated, etc.)
+  createdAt DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([expiresAt])  // For cleanup jobs
+  @@index([userId])     // For finding user's blacklisted tokens
+  @@map("token_blacklist")
+}
+
+// ============================================
+// VEHICLE RENTAL SYSTEM
+// ============================================
+
+enum VehicleStatus {
+  AVAILABLE
+  RENTED
+  MAINTENANCE
+  RETIRED
+}
+
+model Vehicle {
+  id            String        @id @default(uuid())
+  companyId     String
+  make          String        // e.g., "Nissan"
+  model         String        // e.g., "Sunny"
+  year          Int           // e.g., 2024
+  plateNumber   String        @unique
+  color         String?
+  dailyRate     Decimal       @db.Decimal(15, 2)
+  monthlyRate   Decimal       @db.Decimal(15, 2)  // 30-day rate
+  status        VehicleStatus @default(AVAILABLE)
+  imageUrl      String?
+  description   String?
+  isActive      Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  company  Company   @relation(fields: [companyId], references: [id])
+  bookings Booking[]
+
+  @@index([companyId, status])
+  @@index([make, model, year])
+  @@map("vehicles")
+}
+
+enum BookingStatus {
+  PENDING       // Awaiting confirmation
+  CONFIRMED     // Booking confirmed
+  ACTIVE        // Vehicle picked up
+  COMPLETED     // Vehicle returned
+  CANCELLED     // Booking cancelled
+}
+
+model Booking {
+  id              String        @id @default(uuid())
+  companyId       String
+  vehicleId       String
+  customerId      String
+  invoiceId       String?       @unique  // Link to generated invoice
+  bookingNumber   String        // BK-2025-0001
+  startDate       DateTime
+  endDate         DateTime
+  totalDays       Int           // Calculated: endDate - startDate
+  monthlyPeriods  Int           // Number of 30-day periods
+  remainingDays   Int           // Days after monthly periods
+  dailyRate       Decimal       @db.Decimal(15, 2)  // Rate at time of booking
+  monthlyRate     Decimal       @db.Decimal(15, 2)  // Rate at time of booking
+  totalAmount     Decimal       @db.Decimal(15, 2)  // Calculated total
+  status          BookingStatus @default(PENDING)
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  company  Company   @relation(fields: [companyId], references: [id])
+  vehicle  Vehicle   @relation(fields: [vehicleId], references: [id])
+  customer Customer  @relation(fields: [customerId], references: [id])
+  invoice  Invoice?  @relation(fields: [invoiceId], references: [id])
+
+  @@unique([companyId, bookingNumber])
+  @@index([vehicleId, startDate, endDate])
+  @@index([customerId])
+  @@index([status])
+  @@map("bookings")
+}

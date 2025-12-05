@@ -1,0 +1,592 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Car, 
+  Users, 
+  Calendar, 
+  LayoutDashboard, 
+  Plus, 
+  Search, 
+  CheckCircle, 
+  XCircle, 
+  AlertCircle, 
+  DollarSign, 
+  Settings,
+  LogOut,
+  ChevronRight,
+  Key,
+  Fuel
+} from 'lucide-react';
+
+// --- Mock Data Generators ---
+const generateId = () => Math.random().toString(36).substr(2, 9);
+
+const initialVehicles = [
+  { id: 'v1', make: 'Toyota', model: 'Camry', year: 2023, plate: 'DXB-2910', status: 'Available', rate: 150, type: 'Sedan', fuel: 'Petrol', image: 'https://images.unsplash.com/photo-1621007947382-bb3c3994e3df?auto=format&fit=crop&q=80&w=400' },
+  { id: 'v2', make: 'Tesla', model: 'Model 3', year: 2024, plate: 'AD-8821', status: 'Rented', rate: 350, type: 'Electric', fuel: 'Electric', image: 'https://images.unsplash.com/photo-1560958089-b8a1929cea89?auto=format&fit=crop&q=80&w=400' },
+  { id: 'v3', make: 'Ford', model: 'Explorer', year: 2022, plate: 'SHJ-1102', status: 'Maintenance', rate: 280, type: 'SUV', fuel: 'Petrol', image: 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=400' },
+  { id: 'v4', make: 'Hyundai', model: 'Accent', year: 2021, plate: 'DXB-5541', status: 'Available', rate: 90, type: 'Compact', fuel: 'Petrol', image: 'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=400' },
+];
+
+const initialCustomers = [
+  { id: 'c1', name: 'Ahmed Al-Mansoori', phone: '+971 50 123 4567', email: 'ahmed@example.com', license: 'UAE-8829102', status: 'Active' },
+  { id: 'c2', name: 'Sarah Jenkins', phone: '+971 55 987 6543', email: 'sarah.j@example.com', license: 'UK-992811', status: 'Active' },
+];
+
+const initialRentals = [
+  { id: 'r1', vehicleId: 'v2', customerId: 'c1', startDate: '2023-10-25', endDate: '2023-10-30', total: 1750, status: 'Active' },
+];
+
+// --- Components ---
+
+const Card = ({ title, value, icon: Icon, trend, color = "blue" }) => (
+  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+    <div className="flex justify-between items-start">
+      <div>
+        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
+        <h3 className="text-2xl font-bold text-slate-800">{value}</h3>
+      </div>
+      <div className={`p-3 rounded-lg bg-${color}-50 text-${color}-600`}>
+        <Icon size={24} />
+      </div>
+    </div>
+    {trend && (
+      <div className="mt-4 flex items-center text-sm">
+        <span className={trend > 0 ? "text-green-500" : "text-red-500"}>
+          {trend > 0 ? "+" : ""}{trend}%
+        </span>
+        <span className="text-slate-400 ml-2">from last month</span>
+      </div>
+    )}
+  </div>
+);
+
+const Badge = ({ status }) => {
+  const styles = {
+    Available: "bg-green-100 text-green-700",
+    Rented: "bg-blue-100 text-blue-700",
+    Maintenance: "bg-red-100 text-red-700",
+    Cleaning: "bg-yellow-100 text-yellow-700",
+    Active: "bg-emerald-100 text-emerald-700",
+    Completed: "bg-slate-100 text-slate-700",
+  };
+  return (
+    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${styles[status] || "bg-gray-100 text-gray-700"}`}>
+      {status}
+    </span>
+  );
+};
+
+const Modal = ({ isOpen, onClose, title, children }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div className="flex justify-between items-center p-6 border-b border-slate-100">
+          <h3 className="text-lg font-bold text-slate-800">{title}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+            <XCircle size={24} />
+          </button>
+        </div>
+        <div className="p-6 max-h-[80vh] overflow-y-auto">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Main Application ---
+
+export default function CarRentalERP() {
+  // State
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [vehicles, setVehicles] = useState(() => JSON.parse(localStorage.getItem('erp_vehicles')) || initialVehicles);
+  const [customers, setCustomers] = useState(() => JSON.parse(localStorage.getItem('erp_customers')) || initialCustomers);
+  const [rentals, setRentals] = useState(() => JSON.parse(localStorage.getItem('erp_rentals')) || initialRentals);
+  
+  // Modal States
+  const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [isRentalModalOpen, setIsRentalModalOpen] = useState(false);
+  
+  // Form States
+  const [newVehicle, setNewVehicle] = useState({ make: '', model: '', year: new Date().getFullYear(), plate: '', rate: 0, status: 'Available', type: 'Sedan', fuel: 'Petrol' });
+  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '', license: '' });
+  const [newRental, setNewRental] = useState({ vehicleId: '', customerId: '', startDate: '', endDate: '' });
+
+  // Search/Filter State
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Persistence
+  useEffect(() => {
+    localStorage.setItem('erp_vehicles', JSON.stringify(vehicles));
+    localStorage.setItem('erp_customers', JSON.stringify(customers));
+    localStorage.setItem('erp_rentals', JSON.stringify(rentals));
+  }, [vehicles, customers, rentals]);
+
+  // Computed Stats
+  const stats = useMemo(() => {
+    const totalRevenue = rentals.reduce((acc, r) => acc + (r.status === 'Completed' ? r.total : 0), 0);
+    const activeRentalsCount = rentals.filter(r => r.status === 'Active').length;
+    const availableCars = vehicles.filter(v => v.status === 'Available').length;
+    const utilization = vehicles.length > 0 ? Math.round(((vehicles.length - availableCars) / vehicles.length) * 100) : 0;
+    return { totalRevenue, activeRentalsCount, availableCars, utilization };
+  }, [rentals, vehicles]);
+
+  // --- Handlers ---
+
+  const handleAddVehicle = (e) => {
+    e.preventDefault();
+    const vehicle = { ...newVehicle, id: generateId(), image: 'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&q=80&w=400' }; // Default image
+    setVehicles([...vehicles, vehicle]);
+    setIsVehicleModalOpen(false);
+    setNewVehicle({ make: '', model: '', year: new Date().getFullYear(), plate: '', rate: 0, status: 'Available', type: 'Sedan', fuel: 'Petrol' });
+  };
+
+  const handleAddCustomer = (e) => {
+    e.preventDefault();
+    setCustomers([...customers, { ...newCustomer, id: generateId(), status: 'Active' }]);
+    setIsCustomerModalOpen(false);
+    setNewCustomer({ name: '', phone: '', email: '', license: '' });
+  };
+
+  const handleCreateRental = (e) => {
+    e.preventDefault();
+    const selectedVehicle = vehicles.find(v => v.id === newRental.vehicleId);
+    
+    // Calculate days
+    const start = new Date(newRental.startDate);
+    const end = new Date(newRental.endDate);
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1; 
+    const totalCost = diffDays * selectedVehicle.rate;
+
+    const rental = { 
+      ...newRental, 
+      id: generateId(), 
+      total: totalCost, 
+      status: 'Active' 
+    };
+
+    setRentals([...rentals, rental]);
+    
+    // Update vehicle status
+    setVehicles(vehicles.map(v => v.id === newRental.vehicleId ? { ...v, status: 'Rented' } : v));
+    
+    setIsRentalModalOpen(false);
+    setNewRental({ vehicleId: '', customerId: '', startDate: '', endDate: '' });
+  };
+
+  const handleCompleteRental = (rentalId, vehicleId) => {
+    setRentals(rentals.map(r => r.id === rentalId ? { ...r, status: 'Completed' } : r));
+    setVehicles(vehicles.map(v => v.id === vehicleId ? { ...v, status: 'Available' } : v));
+  };
+
+  // --- Sub-Views ---
+
+  const DashboardView = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card title="Total Revenue" value={`$${stats.totalRevenue.toLocaleString()}`} icon={DollarSign} trend={12} color="emerald" />
+        <Card title="Active Rentals" value={stats.activeRentalsCount} icon={Key} color="blue" />
+        <Card title="Available Fleet" value={stats.availableCars} icon={Car} color="indigo" />
+        <Card title="Utilization Rate" value={`${stats.utilization}%`} icon={LayoutDashboard} trend={-2} color="orange" />
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+        <h3 className="text-lg font-bold text-slate-800 mb-4">Recent Activity</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="text-slate-400 border-b border-slate-100">
+                <th className="pb-3 font-medium">Customer</th>
+                <th className="pb-3 font-medium">Vehicle</th>
+                <th className="pb-3 font-medium">Status</th>
+                <th className="pb-3 font-medium text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm">
+              {rentals.slice().reverse().slice(0, 5).map(r => {
+                const cust = customers.find(c => c.id === r.customerId);
+                const car = vehicles.find(v => v.id === r.vehicleId);
+                return (
+                  <tr key={r.id} className="border-b border-slate-50 last:border-0">
+                    <td className="py-4 font-medium text-slate-700">{cust?.name || 'Unknown'}</td>
+                    <td className="py-4 text-slate-500">{car?.make} {car?.model}</td>
+                    <td className="py-4"><Badge status={r.status} /></td>
+                    <td className="py-4 text-right font-mono text-slate-700">${r.total}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  const FleetView = () => (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="relative w-full md:w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <input 
+            type="text" 
+            placeholder="Search cars..." 
+            className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <button 
+          onClick={() => setIsVehicleModalOpen(true)}
+          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors w-full md:w-auto justify-center"
+        >
+          <Plus size={18} /> Add Vehicle
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {vehicles.filter(v => v.make.toLowerCase().includes(searchTerm.toLowerCase()) || v.model.toLowerCase().includes(searchTerm.toLowerCase())).map(vehicle => (
+          <div key={vehicle.id} className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow">
+            <div className="h-48 overflow-hidden relative">
+              <img src={vehicle.image} alt={vehicle.model} className="w-full h-full object-cover" />
+              <div className="absolute top-3 right-3">
+                <Badge status={vehicle.status} />
+              </div>
+            </div>
+            <div className="p-5">
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <h3 className="font-bold text-slate-800 text-lg">{vehicle.make} {vehicle.model}</h3>
+                  <p className="text-slate-500 text-sm">{vehicle.year} • {vehicle.type}</p>
+                </div>
+                <div className="text-right">
+                  <span className="block font-bold text-indigo-600 text-lg">${vehicle.rate}</span>
+                  <span className="text-xs text-slate-400">/day</span>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-4 text-sm text-slate-500 mt-4 pt-4 border-t border-slate-50">
+                <span className="flex items-center gap-1"><Fuel size={14}/> {vehicle.fuel}</span>
+                <span className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-mono text-xs">{vehicle.plate}</span>
+              </div>
+
+              {vehicle.status !== 'Rented' && (
+                 <button className="w-full mt-4 py-2 bg-slate-50 text-slate-600 font-medium rounded-lg hover:bg-slate-100 transition-colors text-sm">
+                   Edit Details
+                 </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const RentalView = () => (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl font-bold text-slate-800">Active Bookings</h2>
+        <button 
+          onClick={() => setIsRentalModalOpen(true)}
+          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+        >
+          <Plus size={18} /> New Booking
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+        <table className="w-full text-left">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th className="px-6 py-4 font-semibold text-slate-600 text-sm">Ref ID</th>
+              <th className="px-6 py-4 font-semibold text-slate-600 text-sm">Customer</th>
+              <th className="px-6 py-4 font-semibold text-slate-600 text-sm">Vehicle</th>
+              <th className="px-6 py-4 font-semibold text-slate-600 text-sm">Duration</th>
+              <th className="px-6 py-4 font-semibold text-slate-600 text-sm">Total</th>
+              <th className="px-6 py-4 font-semibold text-slate-600 text-sm">Status</th>
+              <th className="px-6 py-4 font-semibold text-slate-600 text-sm text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rentals.map(rental => {
+              const car = vehicles.find(v => v.id === rental.vehicleId);
+              const cust = customers.find(c => c.id === rental.customerId);
+              return (
+                <tr key={rental.id} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-6 py-4 text-xs font-mono text-slate-400">#{rental.id.toUpperCase()}</td>
+                  <td className="px-6 py-4">
+                    <div className="font-medium text-slate-800">{cust?.name}</div>
+                    <div className="text-xs text-slate-500">{cust?.phone}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="font-medium text-slate-800">{car?.make} {car?.model}</div>
+                    <div className="text-xs text-slate-500">{car?.plate}</div>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-600">
+                    {rental.startDate} <span className="mx-1 text-slate-300">→</span> {rental.endDate}
+                  </td>
+                  <td className="px-6 py-4 font-mono font-medium text-slate-700">${rental.total}</td>
+                  <td className="px-6 py-4"><Badge status={rental.status} /></td>
+                  <td className="px-6 py-4 text-right">
+                    {rental.status === 'Active' && (
+                      <button 
+                        onClick={() => handleCompleteRental(rental.id, rental.vehicleId)}
+                        className="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-3 py-1.5 rounded font-medium transition-colors"
+                      >
+                        Return Car
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {rentals.length === 0 && (
+              <tr><td colSpan="7" className="px-6 py-12 text-center text-slate-400">No rentals found. Create one to get started.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const CustomerView = () => (
+    <div className="space-y-6">
+       <div className="flex justify-between items-center">
+        <div className="relative w-64">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <input type="text" placeholder="Search clients..." className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+        <button 
+          onClick={() => setIsCustomerModalOpen(true)}
+          className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors"
+        >
+          <Plus size={18} /> Add Customer
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {customers.map(c => (
+          <div key={c.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4">
+             <div className="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xl">
+               {c.name.charAt(0)}
+             </div>
+             <div className="flex-1 min-w-0">
+               <h4 className="font-bold text-slate-800 truncate">{c.name}</h4>
+               <p className="text-sm text-slate-500 truncate">{c.email}</p>
+               <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
+                  <span className="bg-slate-100 px-1.5 py-0.5 rounded">Lic: {c.license}</span>
+               </div>
+             </div>
+             <button className="text-slate-300 hover:text-indigo-600">
+               <Settings size={18} />
+             </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="flex min-h-screen bg-slate-50 font-sans text-slate-900">
+      {/* Sidebar */}
+      <aside className="w-20 lg:w-64 bg-slate-900 text-white fixed h-full z-10 transition-all duration-300 flex flex-col">
+        <div className="h-20 flex items-center justify-center lg:justify-start lg:px-6 border-b border-slate-800">
+          <div className="bg-indigo-600 p-2 rounded-lg">
+             <Car size={24} className="text-white" />
+          </div>
+          <span className="ml-3 font-bold text-xl hidden lg:block">TurboRent</span>
+        </div>
+
+        <nav className="flex-1 py-6 px-2 lg:px-4 space-y-1">
+          {[
+            { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+            { id: 'fleet', label: 'Fleet', icon: Car },
+            { id: 'rentals', label: 'Rentals', icon: Calendar },
+            { id: 'customers', label: 'Customers', icon: Users },
+          ].map(item => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              className={`w-full flex items-center p-3 rounded-lg transition-all duration-200 ${
+                activeTab === item.id 
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' 
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <item.icon size={20} className="min-w-[20px]" />
+              <span className="ml-3 hidden lg:block font-medium">{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-4 border-t border-slate-800">
+          <button className="w-full flex items-center justify-center lg:justify-start p-3 text-slate-400 hover:text-white transition-colors">
+            <LogOut size={20} />
+            <span className="ml-3 hidden lg:block">Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 ml-20 lg:ml-64 p-4 lg:p-8 overflow-y-auto h-screen">
+        <header className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800 capitalize">{activeTab}</h1>
+            <p className="text-slate-500 text-sm mt-1">Manage your rental business efficiently.</p>
+          </div>
+          <div className="flex items-center gap-4">
+             <div className="hidden md:block text-right">
+                <p className="text-sm font-bold text-slate-700">Admin User</p>
+                <p className="text-xs text-slate-500">Dubai Branch</p>
+             </div>
+             <div className="h-10 w-10 rounded-full bg-slate-200 overflow-hidden border-2 border-white shadow-sm">
+               <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100" alt="User" />
+             </div>
+          </div>
+        </header>
+
+        {activeTab === 'dashboard' && <DashboardView />}
+        {activeTab === 'fleet' && <FleetView />}
+        {activeTab === 'rentals' && <RentalView />}
+        {activeTab === 'customers' && <CustomerView />}
+      </main>
+
+      {/* Modals */}
+      
+      {/* Add Vehicle Modal */}
+      <Modal isOpen={isVehicleModalOpen} onClose={() => setIsVehicleModalOpen(false)} title="Add New Vehicle">
+        <form onSubmit={handleAddVehicle} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Make</label>
+              <input required type="text" className="w-full p-2 border rounded-lg" placeholder="e.g. Toyota" value={newVehicle.make} onChange={e => setNewVehicle({...newVehicle, make: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Model</label>
+              <input required type="text" className="w-full p-2 border rounded-lg" placeholder="e.g. Camry" value={newVehicle.model} onChange={e => setNewVehicle({...newVehicle, model: e.target.value})} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Year</label>
+              <input required type="number" className="w-full p-2 border rounded-lg" value={newVehicle.year} onChange={e => setNewVehicle({...newVehicle, year: parseInt(e.target.value)})} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Daily Rate ($)</label>
+              <input required type="number" className="w-full p-2 border rounded-lg" value={newVehicle.rate} onChange={e => setNewVehicle({...newVehicle, rate: parseInt(e.target.value)})} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">License Plate</label>
+            <input required type="text" className="w-full p-2 border rounded-lg" placeholder="e.g. DXB-1234" value={newVehicle.plate} onChange={e => setNewVehicle({...newVehicle, plate: e.target.value})} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+             <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
+                <select className="w-full p-2 border rounded-lg" value={newVehicle.type} onChange={e => setNewVehicle({...newVehicle, type: e.target.value})}>
+                  <option>Sedan</option>
+                  <option>SUV</option>
+                  <option>Compact</option>
+                  <option>Luxury</option>
+                  <option>Electric</option>
+                </select>
+             </div>
+             <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Fuel</label>
+                <select className="w-full p-2 border rounded-lg" value={newVehicle.fuel} onChange={e => setNewVehicle({...newVehicle, fuel: e.target.value})}>
+                  <option>Petrol</option>
+                  <option>Diesel</option>
+                  <option>Electric</option>
+                  <option>Hybrid</option>
+                </select>
+             </div>
+          </div>
+          <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 mt-4">Save Vehicle</button>
+        </form>
+      </Modal>
+
+      {/* Add Customer Modal */}
+      <Modal isOpen={isCustomerModalOpen} onClose={() => setIsCustomerModalOpen(false)} title="Register Customer">
+        <form onSubmit={handleAddCustomer} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+            <input required type="text" className="w-full p-2 border rounded-lg" placeholder="John Doe" value={newCustomer.name} onChange={e => setNewCustomer({...newCustomer, name: e.target.value})} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+            <input required type="email" className="w-full p-2 border rounded-lg" placeholder="john@example.com" value={newCustomer.email} onChange={e => setNewCustomer({...newCustomer, email: e.target.value})} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+            <input required type="tel" className="w-full p-2 border rounded-lg" placeholder="+1 234 567 890" value={newCustomer.phone} onChange={e => setNewCustomer({...newCustomer, phone: e.target.value})} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Driver's License ID</label>
+            <input required type="text" className="w-full p-2 border rounded-lg" placeholder="Lic-12345" value={newCustomer.license} onChange={e => setNewCustomer({...newCustomer, license: e.target.value})} />
+          </div>
+          <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 mt-4">Register Customer</button>
+        </form>
+      </Modal>
+
+      {/* New Rental Modal */}
+      <Modal isOpen={isRentalModalOpen} onClose={() => setIsRentalModalOpen(false)} title="Create New Booking">
+        <form onSubmit={handleCreateRental} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Select Customer</label>
+            <select required className="w-full p-2 border rounded-lg" value={newRental.customerId} onChange={e => setNewRental({...newRental, customerId: e.target.value})}>
+              <option value="">-- Select Customer --</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.license})</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Select Vehicle</label>
+            <select required className="w-full p-2 border rounded-lg" value={newRental.vehicleId} onChange={e => setNewRental({...newRental, vehicleId: e.target.value})}>
+              <option value="">-- Select Vehicle --</option>
+              {vehicles.filter(v => v.status === 'Available').map(v => (
+                <option key={v.id} value={v.id}>{v.make} {v.model} - ${v.rate}/day</option>
+              ))}
+            </select>
+            {vehicles.filter(v => v.status === 'Available').length === 0 && (
+               <p className="text-xs text-red-500 mt-1">No vehicles currently available.</p>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
+              <input required type="date" className="w-full p-2 border rounded-lg" value={newRental.startDate} onChange={e => setNewRental({...newRental, startDate: e.target.value})} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">End Date</label>
+              <input required type="date" className="w-full p-2 border rounded-lg" value={newRental.endDate} onChange={e => setNewRental({...newRental, endDate: e.target.value})} />
+            </div>
+          </div>
+          
+          {newRental.vehicleId && newRental.startDate && newRental.endDate && (
+             <div className="bg-slate-100 p-3 rounded-lg text-sm">
+                <div className="flex justify-between mb-1">
+                   <span>Daily Rate:</span>
+                   <span>${vehicles.find(v => v.id === newRental.vehicleId)?.rate}</span>
+                </div>
+                <div className="flex justify-between font-bold text-indigo-700 border-t border-slate-200 pt-1 mt-1">
+                   <span>Estimated Total:</span>
+                   <span>
+                      ${(() => {
+                         const start = new Date(newRental.startDate);
+                         const end = new Date(newRental.endDate);
+                         const diff = Math.ceil(Math.abs(end - start) / (1000 * 60 * 60 * 24)) || 1;
+                         return diff * (vehicles.find(v => v.id === newRental.vehicleId)?.rate || 0);
+                      })()}
+                   </span>
+                </div>
+             </div>
+          )}
+
+          <button type="submit" className="w-full bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 mt-4">Confirm Booking</button>
+        </form>
+      </Modal>
+
+    </div>
+  );
+}

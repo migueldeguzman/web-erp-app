@@ -1,0 +1,28 @@
+{
+  "name": "vesla-erp",
+  "version": "1.0.0",
+  "description": "Financial ERP Web Application for Vesla",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=backend\" \"npm run dev --workspace=frontend\"",
+    "build": "npm run build --workspaces",
+    "backend": "npm run dev --workspace=backend",
+    "frontend": "npm run dev --workspace=frontend"
+  },
+  "keywords": [
+    "erp",
+    "accounting",
+    "finance",
+    "invoice",
+    "payments"
+  ],
+  "author": "Vesla ERP Team",
+  "license": "PRIVATE",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
