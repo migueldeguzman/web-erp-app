@@ -19,10 +19,13 @@ export default function LoginPage() {
 
     try {
       const response = await authService.login({ email, password });
+      // Backend returns: { status: 'success', data: { user, token } }
+      // authService already returns response.data, so we have: { status: 'success', data: { user, token } }
       login(response.data.user, response.data.token);
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed');
+      console.error('Login error:', err);
+      setError(err.response?.data?.message || err.message || 'Login failed');
     } finally {
       setLoading(false);
     }
