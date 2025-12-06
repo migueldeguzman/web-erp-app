@@ -62,6 +62,12 @@ export default function Layout() {
             >
               Journal Vouchers
             </Link>
+            <Link
+              to="/bookings"
+              className="px-3 py-4 text-sm font-medium text-gray-700 hover:text-primary-600 border-b-2 border-transparent hover:border-primary-600"
+            >
+              Bookings
+            </Link>
           </div>
         </div>
       </nav>

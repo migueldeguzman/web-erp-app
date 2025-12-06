@@ -5,6 +5,7 @@ import DashboardPage from './pages/DashboardPage';
 import InvoicesPage from './pages/InvoicesPage';
 import PaymentsPage from './pages/PaymentsPage';
 import TransactionsPage from './pages/TransactionsPage';
+import BookingsPage from './pages/BookingsPage';
 import Layout from './components/Layout';
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
         <Route path="invoices" element={<InvoicesPage />} />
         <Route path="payments" element={<PaymentsPage />} />
         <Route path="transactions" element={<TransactionsPage />} />
+        <Route path="bookings" element={<BookingsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
