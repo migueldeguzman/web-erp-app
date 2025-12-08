@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { BookingService } from '../services/booking.service';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { getDefaultCompanyId } from '../config/constants';
 
 const prisma = new PrismaClient();
 const bookingService = new BookingService(prisma);
@@ -12,20 +13,51 @@ const bookingService = new BookingService(prisma);
 export const createBooking = async (req: AuthRequest, res: Response) => {
   try {
     const {
-      companyId,
       vehicleId,
-      customerId,
       startDate,
       endDate,
       notes,
+      paymentMethod,
+      termsAccepted,
+      addOns,
+      notificationPreferences,
+      accountingEntry,
+      // Optional overrides (for admin-created bookings)
+      companyId: overrideCompanyId,
+      customerId: overrideCustomerId,
     } = req.body;
 
-    // Validation
-    if (!companyId || !vehicleId || !customerId || !startDate || !endDate) {
+    // Validation: vehicleId and dates are required
+    if (!vehicleId || !startDate || !endDate) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: companyId, vehicleId, customerId, startDate, endDate',
+        message: 'Missing required fields: vehicleId, startDate, endDate',
       });
+    }
+
+    // Derive customerId from authenticated user (unless overridden by admin)
+    const customerId = overrideCustomerId || req.user!.id;
+
+    // Determine companyId with fallback logic:
+    // 1. Use override if provided (admin use case)
+    // 2. Look up vehicle's company
+    // 3. Fall back to default company (Vesla Rent A Car)
+    let companyId = overrideCompanyId;
+    if (!companyId) {
+      const vehicle = await prisma.vehicle.findUnique({
+        where: { id: vehicleId },
+        select: { companyId: true },
+      });
+
+      if (!vehicle) {
+        return res.status(404).json({
+          success: false,
+          message: 'Vehicle not found',
+        });
+      }
+
+      // Use vehicle's company if set, otherwise use default company
+      companyId = vehicle.companyId || getDefaultCompanyId();
     }
 
     const start = new Date(startDate);
@@ -53,6 +85,12 @@ export const createBooking = async (req: AuthRequest, res: Response) => {
       endDate: end,
       notes,
       userId: req.user!.id,
+      // Additional fields from mobile app
+      paymentMethod,
+      termsAccepted,
+      addOns,
+      notificationPreferences,
+      accountingEntry,
     });
 
     res.status(201).json({

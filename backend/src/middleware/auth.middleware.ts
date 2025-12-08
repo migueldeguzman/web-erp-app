@@ -66,8 +66,8 @@ export const authenticate = async (
       throw new AppError('Token has been revoked', 401);
     }
 
-    // Check if user still exists and is active
-    const user = await prisma.user.findUnique({
+    // Check if user exists in either User table (staff) or Customer table (customers)
+    let user = await prisma.user.findUnique({
       where: { id: decoded.id },
       select: {
         id: true,
@@ -77,8 +77,29 @@ export const authenticate = async (
       },
     });
 
+    // If not found in User table, check Customer table
     if (!user) {
-      throw new AppError('User not found', 401);
+      const customer = await prisma.customer.findUnique({
+        where: { id: decoded.id },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          isActive: true,
+        },
+      });
+
+      if (!customer) {
+        throw new AppError('User not found', 401);
+      }
+
+      // Map customer to user structure
+      user = {
+        id: customer.id,
+        email: customer.email,
+        role: customer.role,
+        isActive: customer.isActive,
+      };
     }
 
     if (!user.isActive) {

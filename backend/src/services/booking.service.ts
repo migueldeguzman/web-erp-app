@@ -21,7 +21,9 @@ export interface CreateBookingInput {
   dropoffLocation?: string;
   paymentMethod?: string;
   termsAccepted?: boolean;
-  addOns?: BookingAddOnInput[];
+  addOns?: BookingAddOnInput[] | any[];  // Flexible format
+  notificationPreferences?: any;
+  accountingEntry?: any;
 }
 
 export class BookingService {
@@ -84,18 +86,20 @@ export class BookingService {
 
     while (attempt < maxRetries) {
       try {
-        const result = await tx.$queryRaw<{ count: bigint }[]>`
-          SELECT COUNT(*) as count
-          FROM bookings
-          WHERE "companyId" = ${companyId}
-            AND "bookingNumber" LIKE ${`BK-${year}-%`}
-          FOR UPDATE
-        `;
+        // Use Prisma count instead of raw SQL with FOR UPDATE
+        // FOR UPDATE doesn't work with aggregate functions like COUNT
+        const count = await tx.booking.count({
+          where: {
+            companyId,
+            bookingNumber: {
+              startsWith: `BK-${year}-`,
+            },
+          },
+        });
 
-        const count = Number(result[0].count);
         const newNumber = `BK-${year}-${String(count + 1).padStart(4, '0')}`;
 
-        // Verify the number doesn't exist
+        // Verify the number doesn't exist (handles race conditions)
         const existing = await tx.booking.findFirst({
           where: {
             companyId,
@@ -153,8 +157,22 @@ export class BookingService {
           where: { id: data.customerId },
         });
 
-        if (!customer || customer.companyId !== data.companyId) {
-          throw new Error('Customer not found or does not belong to this company');
+        if (!customer) {
+          throw new Error('Customer not found');
+        }
+
+        // If customer has a companyId (staff-created customers), verify it matches
+        // Mobile app customers have null companyId and can book from any company
+        if (customer.companyId && customer.companyId !== data.companyId) {
+          throw new Error('Customer does not belong to this company');
+        }
+
+        // If customer doesn't have a companyId, assign the booking's companyId
+        if (!customer.companyId) {
+          await tx.customer.update({
+            where: { id: customer.id },
+            data: { companyId: data.companyId },
+          });
         }
 
         // Check vehicle availability for the period
@@ -229,13 +247,16 @@ export class BookingService {
 
         // Create add-ons if provided
         if (data.addOns && data.addOns.length > 0) {
-          const addOns = data.addOns.map((addon) => {
+          const addOns = data.addOns.map((addon: any) => {
+            // Support both formats: { addonName, dailyRate } and { id, name, dailyRate }
+            const addonName = addon.addonName || addon.name;
+            const dailyRate = addon.dailyRate;
             const quantity = addon.quantity || rateCalculation.totalDays;
-            const totalAmount = new Decimal(addon.dailyRate).times(quantity);
+            const totalAmount = new Decimal(dailyRate).times(quantity);
             return {
               bookingId: booking.id,
-              addonName: addon.addonName,
-              dailyRate: new Decimal(addon.dailyRate),
+              addonName,
+              dailyRate: new Decimal(dailyRate),
               quantity,
               totalAmount,
             };

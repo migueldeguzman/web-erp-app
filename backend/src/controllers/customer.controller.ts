@@ -1,8 +1,11 @@
-import { Response, NextFunction } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { AppError, asyncHandler } from '../middleware/error.middleware';
 import { AuthRequest } from '../middleware/auth.middleware';
 import prisma from '../config/database';
 import { AuditService } from '../services/audit.service';
+import { hashPassword } from '../utils/password.util';
+import { generateToken } from '../utils/jwt.util';
+import { getDefaultCompanyId } from '../config/constants';
 
 const auditService = new AuditService(prisma);
 
@@ -411,6 +414,204 @@ export const deleteCustomer = asyncHandler(
       status: 'success',
       data: customer,
       message: `Customer '${customer.name}' has been deactivated`,
+    });
+  }
+);
+
+/**
+ * Register customer with full KYC data (PUBLIC endpoint - no authentication required)
+ * POST /api/customers/register-with-kyc
+ */
+export const registerWithKYC = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const {
+      email,
+      password,
+      firstName,
+      lastName,
+      phoneNumber,
+      emiratesId,
+      passportNumber,
+      passportCountry,
+      licenseNumber,
+      driversLicenseCountry,
+      driversLicenseExpiry,
+      nationality,
+      dateOfBirth,
+      isTourist,
+    } = req.body;
+
+    // Validate required fields
+    if (!email || !password || !firstName || !lastName || !phoneNumber || !licenseNumber || !driversLicenseCountry || !nationality) {
+      throw new AppError('Missing required fields', 400);
+    }
+
+    // Check if email already exists
+    const existing = await prisma.customer.findUnique({
+      where: { email },
+    });
+
+    if (existing) {
+      throw new AppError('Email already registered', 409);
+    }
+
+    // Hash password
+    const passwordHash = await hashPassword(password);
+
+    // Generate unique customer code
+    const customerCount = await prisma.customer.count();
+    const code = `CUST-${String(customerCount + 1).padStart(6, '0')}`;
+
+    // Get default company ID for mobile app registrations
+    // Note: companyId will be set to null initially, then assigned on first booking
+    // This allows the customer to book from any company vehicle initially
+    const defaultCompanyId = getDefaultCompanyId();
+
+    // Create customer
+    const customer = await prisma.customer.create({
+      data: {
+        companyId: null, // Will be set on first booking
+        code,
+        name: `${firstName} ${lastName}`,
+        firstName,
+        lastName,
+        email,
+        passwordHash,
+        role: 'CUSTOMER',
+        mobileNumber: phoneNumber,
+        licenseNumber,
+        driversLicenseCountry,
+        licenseExpiry: driversLicenseExpiry ? new Date(driversLicenseExpiry) : null,
+        emiratesId: isTourist ? null : emiratesId,
+        passportNumber: isTourist ? passportNumber : null,
+        passportCountry: isTourist ? passportCountry : null,
+        nationality,
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+        isTourist,
+        isActive: true,
+      },
+    });
+
+    // Generate JWT token
+    const token = generateToken({
+      id: customer.id,
+      email: customer.email,
+      role: customer.role,
+    });
+
+    // Return user object + token
+    res.status(201).json({
+      success: true,
+      data: {
+        customerId: customer.id,
+      },
+      user: {
+        id: customer.id,
+        email: customer.email,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        role: customer.role,
+      },
+      token,
+      message: 'Customer registered successfully',
+    });
+  }
+);
+
+/**
+ * Update customer KYC data (requires authentication)
+ * PUT /api/customers/kyc/update
+ */
+export const updateKYC = asyncHandler(
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      throw new AppError('Not authenticated', 401);
+    }
+
+    const {
+      email,
+      phoneNumber,
+      emiratesId,
+      passportNumber,
+      passportCountry,
+      licenseNumber,
+      driversLicenseCountry,
+      driversLicenseExpiry,
+      nationality,
+      dateOfBirth,
+      isTourist,
+    } = req.body;
+
+    // Find customer by email
+    const customer = await prisma.customer.findUnique({
+      where: { email },
+    });
+
+    if (!customer) {
+      throw new AppError('Customer not found', 404);
+    }
+
+    // Update customer
+    const updated = await prisma.customer.update({
+      where: { email },
+      data: {
+        mobileNumber: phoneNumber,
+        emiratesId: isTourist ? null : emiratesId,
+        passportNumber: isTourist ? passportNumber : null,
+        passportCountry: isTourist ? passportCountry : null,
+        licenseNumber,
+        driversLicenseCountry,
+        licenseExpiry: driversLicenseExpiry ? new Date(driversLicenseExpiry) : null,
+        nationality,
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+        isTourist,
+      },
+    });
+
+    res.json({
+      success: true,
+      data: updated,
+      message: 'KYC data updated successfully',
+    });
+  }
+);
+
+/**
+ * Update customer card data (requires authentication)
+ * PUT /api/customers/card/update
+ */
+export const updateCard = asyncHandler(
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      throw new AppError('Not authenticated', 401);
+    }
+
+    const { email, creditCardNumber, creditCardType, cardHolderName, bankProvider } = req.body;
+
+    // Find customer by email
+    const customer = await prisma.customer.findUnique({
+      where: { email },
+    });
+
+    if (!customer) {
+      throw new AppError('Customer not found', 404);
+    }
+
+    // Update customer card data (only last 4 digits)
+    const updated = await prisma.customer.update({
+      where: { email },
+      data: {
+        cardLast4: creditCardNumber, // Should be last 4 digits only from frontend
+        cardType: creditCardType,
+        cardHolderName,
+        bankProvider,
+      },
+    });
+
+    res.json({
+      success: true,
+      data: updated,
+      message: 'Card data updated successfully',
     });
   }
 );

@@ -4,7 +4,14 @@ import * as customerController from '../controllers/customer.controller';
 
 const router = Router();
 
-// All routes require authentication
+// PUBLIC routes (no authentication required)
+router.post('/register-with-kyc', customerController.registerWithKYC);
+
+// PROTECTED routes (require authentication)
+router.put('/kyc/update', authenticate, customerController.updateKYC);
+router.put('/card/update', authenticate, customerController.updateCard);
+
+// All other routes require authentication
 router.use(authenticate);
 
 // Customer CRUD routes
