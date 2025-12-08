@@ -9,15 +9,16 @@ import {
 
 const router = Router();
 
-// All routes require authentication
-router.use(authenticate);
-
 /**
  * GET /api/vehicles/available
  * Get all available vehicles for a company
  * Query params: companyId (required)
+ * PUBLIC ENDPOINT - No authentication required for mobile app
  */
 router.get('/available', getAvailableVehicles);
+
+// All other routes require authentication
+router.use(authenticate);
 
 /**
  * GET /api/vehicles/:id/availability

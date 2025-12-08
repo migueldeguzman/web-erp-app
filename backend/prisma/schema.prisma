@@ -34,11 +34,11 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  createdInvoices      Invoice[]         @relation("InvoiceCreatedBy")
-  createdPayments      Payment[]         @relation("PaymentCreatedBy")
-  createdTransactions  Transaction[]     @relation("TransactionCreatedBy")
-  auditLogs            AuditLog[]
-  blacklistedTokens    TokenBlacklist[]
+  createdInvoices     Invoice[]        @relation("InvoiceCreatedBy")
+  createdPayments     Payment[]        @relation("PaymentCreatedBy")
+  createdTransactions Transaction[]    @relation("TransactionCreatedBy")
+  auditLogs           AuditLog[]
+  blacklistedTokens   TokenBlacklist[]
 
   @@map("users")
 }
@@ -48,16 +48,16 @@ model User {
 // ============================================
 
 model Company {
-  id          String   @id @default(uuid())
-  code        String   @unique
-  name        String
-  address     String?
-  phone       String?
-  email       String?
-  taxNumber   String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  address   String?
+  phone     String?
+  email     String?
+  taxNumber String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   accounts     Account[]
@@ -72,25 +72,56 @@ model Company {
 }
 
 model Customer {
-  id        String   @id @default(uuid())
-  companyId String
-  code      String
-  name      String
-  email     String?
-  phone     String?
-  address   String?
-  taxNumber String?
+  id           String  @id @default(uuid())
+  companyId    String? // Optional - individual customers don't belong to a company
+  code         String  @unique // Unique across all customers
+  name         String // Full name
+  firstName    String?
+  lastName     String?
+  email        String  @unique
+  phone        String?
+  mobileNumber String? // Mobile-specific number
+  address      String?
+  taxNumber    String?
+
+  // KYC/Identity fields
+  licenseNumber         String?
+  licenseExpiry         DateTime?
+  driversLicenseCountry String?
+  emiratesId            String?   @unique
+  passportNumber        String?   @unique
+  passportCountry       String?
+  nationality           String?
+  dateOfBirth           DateTime?
+  isTourist             Boolean   @default(false)
+
+  // Payment card (last 4 digits only - PCI compliance)
+  cardLast4      String?
+  cardType       String? // Visa, Mastercard, etc.
+  cardHolderName String?
+  bankProvider   String?
+
+  // KYC verification status
+  kycVerified   Boolean   @default(false)
+  kycVerifiedAt DateTime?
+
+  // Authentication (customers can log in directly)
+  passwordHash String?
+  role         String? @default("CUSTOMER")
+
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  company  Company   @relation(fields: [companyId], references: [id])
+  company  Company?  @relation(fields: [companyId], references: [id])
   invoices Invoice[]
   payments Payment[]
   bookings Booking[]
 
-  @@unique([companyId, code])
+  @@index([email])
+  @@index([emiratesId])
+  @@index([passportNumber])
   @@map("customers")
 }
 
@@ -187,26 +218,26 @@ model Transaction {
   companyId   String
   type        TransactionType
   status      TransactionStatus @default(DRAFT)
-  number      String            // JV-2025-001, INV-2025-001, etc.
+  number      String // JV-2025-001, INV-2025-001, etc.
   date        DateTime
   description String?
-  reference   String?           // External reference
+  reference   String? // External reference
   createdById String
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
   postedAt    DateTime?
 
   // Relations
-  company Company           @relation(fields: [companyId], references: [id])
-  createdBy User            @relation("TransactionCreatedBy", fields: [createdById], references: [id])
+  company   Company           @relation(fields: [companyId], references: [id])
+  createdBy User              @relation("TransactionCreatedBy", fields: [createdById], references: [id])
   lines     TransactionLine[]
   invoice   Invoice?
   payment   Payment?
 
   @@unique([companyId, number])
   @@index([companyId, type, date])
-  @@index([createdById])  // Added index for user's transactions
-  @@index([date])         // Added index for date-based queries
+  @@index([createdById]) // Added index for user's transactions
+  @@index([date]) // Added index for date-based queries
   @@map("transactions")
 }
 
@@ -242,23 +273,23 @@ enum InvoiceStatus {
 }
 
 model Invoice {
-  id             String        @id @default(uuid())
-  companyId      String
-  customerId     String
-  transactionId  String        @unique
-  invoiceNumber  String
-  invoiceDate    DateTime
-  dueDate        DateTime
-  status         InvoiceStatus @default(DRAFT)
-  subtotal       Decimal       @db.Decimal(15, 2)
-  taxAmount      Decimal       @default(0) @db.Decimal(15, 2)
-  totalAmount    Decimal       @db.Decimal(15, 2)
-  paidAmount     Decimal       @default(0) @db.Decimal(15, 2)
-  balanceAmount  Decimal       @db.Decimal(15, 2)
-  notes          String?
-  createdById    String
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id            String        @id @default(uuid())
+  companyId     String
+  customerId    String
+  transactionId String        @unique
+  invoiceNumber String
+  invoiceDate   DateTime
+  dueDate       DateTime
+  status        InvoiceStatus @default(DRAFT)
+  subtotal      Decimal       @db.Decimal(15, 2)
+  taxAmount     Decimal       @default(0) @db.Decimal(15, 2)
+  totalAmount   Decimal       @db.Decimal(15, 2)
+  paidAmount    Decimal       @default(0) @db.Decimal(15, 2)
+  balanceAmount Decimal       @db.Decimal(15, 2)
+  notes         String?
+  createdById   String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   // Relations
   company     Company       @relation(fields: [companyId], references: [id])
@@ -271,8 +302,8 @@ model Invoice {
 
   @@unique([companyId, invoiceNumber])
   @@index([companyId, customerId, status])
-  @@index([invoiceDate])  // Added index for date-based queries
-  @@index([dueDate])      // Added index for due date queries
+  @@index([invoiceDate]) // Added index for date-based queries
+  @@index([dueDate]) // Added index for due date queries
   @@map("invoices")
 }
 
@@ -313,21 +344,21 @@ enum PaymentStatus {
 }
 
 model Payment {
-  id             String        @id @default(uuid())
-  companyId      String
-  customerId     String?
-  invoiceId      String?
-  transactionId  String        @unique
-  paymentNumber  String
-  paymentDate    DateTime
-  amount         Decimal       @db.Decimal(15, 2)
-  method         PaymentMethod
-  status         PaymentStatus @default(DRAFT)
-  reference      String?       // Cheque number, transaction ID, etc.
-  notes          String?
-  createdById    String
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id            String        @id @default(uuid())
+  companyId     String
+  customerId    String?
+  invoiceId     String?
+  transactionId String        @unique
+  paymentNumber String
+  paymentDate   DateTime
+  amount        Decimal       @db.Decimal(15, 2)
+  method        PaymentMethod
+  status        PaymentStatus @default(DRAFT)
+  reference     String? // Cheque number, transaction ID, etc.
+  notes         String?
+  createdById   String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   // Relations
   company     Company     @relation(fields: [companyId], references: [id])
@@ -338,7 +369,7 @@ model Payment {
 
   @@unique([companyId, paymentNumber])
   @@index([companyId, customerId, status])
-  @@index([paymentDate])  // Added index for date-based queries
+  @@index([paymentDate]) // Added index for date-based queries
   @@map("payments")
 }
 
@@ -360,8 +391,8 @@ model AuditLog {
   id        String      @id @default(uuid())
   userId    String
   action    AuditAction
-  entity    String      // Table name
-  entityId  String      // Record ID
+  entity    String // Table name
+  entityId  String // Record ID
   oldValue  Json?
   newValue  Json?
   ipAddress String?
@@ -373,7 +404,7 @@ model AuditLog {
 
   @@index([userId, createdAt])
   @@index([entity, entityId])
-  @@index([createdAt])  // Added standalone index for time-based queries
+  @@index([createdAt]) // Added standalone index for time-based queries
   @@map("audit_logs")
 }
 
@@ -383,17 +414,17 @@ model AuditLog {
 
 model TokenBlacklist {
   id        String   @id @default(uuid())
-  token     String   @unique  // The JWT token to blacklist
-  userId    String             // User who owned this token
-  expiresAt DateTime           // When the token would have expired naturally
-  reason    String?            // Why the token was blacklisted (logout, user deactivated, etc.)
+  token     String   @unique // The JWT token to blacklist
+  userId    String // User who owned this token
+  expiresAt DateTime // When the token would have expired naturally
+  reason    String? // Why the token was blacklisted (logout, user deactivated, etc.)
   createdAt DateTime @default(now())
 
   // Relations
   user User @relation(fields: [userId], references: [id])
 
-  @@index([expiresAt])  // For cleanup jobs
-  @@index([userId])     // For finding user's blacklisted tokens
+  @@index([expiresAt]) // For cleanup jobs
+  @@index([userId]) // For finding user's blacklisted tokens
   @@map("token_blacklist")
 }
 
@@ -409,21 +440,36 @@ enum VehicleStatus {
 }
 
 model Vehicle {
-  id            String        @id @default(uuid())
-  companyId     String
-  make          String        // e.g., "Nissan"
-  model         String        // e.g., "Sunny"
-  year          Int           // e.g., 2024
-  plateNumber   String        @unique
-  color         String?
-  dailyRate     Decimal       @db.Decimal(15, 2)
-  monthlyRate   Decimal       @db.Decimal(15, 2)  // 30-day rate
-  status        VehicleStatus @default(AVAILABLE)
-  imageUrl      String?
-  description   String?
-  isActive      Boolean       @default(true)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id          String  @id @default(uuid())
+  companyId   String
+  make        String // e.g., "Nissan"
+  model       String // e.g., "Sunny"
+  year        Int // e.g., 2024
+  plateNumber String  @unique // License plate
+  vin         String? @unique // Vehicle Identification Number
+  color       String?
+  category    String? // Sedan, SUV, Luxury, etc.
+
+  // Rental rates
+  dailyRate   Decimal  @db.Decimal(15, 2)
+  weeklyRate  Decimal? @db.Decimal(15, 2) // 7-day rate
+  monthlyRate Decimal  @db.Decimal(15, 2) // 30-day rate
+
+  // Vehicle specifications
+  mileage      Int?    @default(0)
+  fuelType     String? // Petrol, Diesel, Electric, Hybrid
+  transmission String? // Automatic, Manual
+  seats        Int? // Number of seats
+
+  // Status and availability
+  status   VehicleStatus @default(AVAILABLE)
+  isBooked Boolean       @default(false) // Quick availability flag
+
+  imageUrl    String?
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // Relations
   company  Company   @relation(fields: [companyId], references: [id])
@@ -431,46 +477,75 @@ model Vehicle {
 
   @@index([companyId, status])
   @@index([make, model, year])
+  @@index([status, isBooked]) // For availability queries
   @@map("vehicles")
 }
 
 enum BookingStatus {
-  PENDING       // Awaiting confirmation
-  CONFIRMED     // Booking confirmed
-  ACTIVE        // Vehicle picked up
-  COMPLETED     // Vehicle returned
-  CANCELLED     // Booking cancelled
+  PENDING // Awaiting confirmation
+  CONFIRMED // Booking confirmed
+  ACTIVE // Vehicle picked up
+  COMPLETED // Vehicle returned
+  CANCELLED // Booking cancelled
 }
 
 model Booking {
-  id              String        @id @default(uuid())
-  companyId       String
-  vehicleId       String
-  customerId      String
-  invoiceId       String?       @unique  // Link to generated invoice
-  bookingNumber   String        // BK-2025-0001
-  startDate       DateTime
-  endDate         DateTime
-  totalDays       Int           // Calculated: endDate - startDate
-  monthlyPeriods  Int           // Number of 30-day periods
-  remainingDays   Int           // Days after monthly periods
-  dailyRate       Decimal       @db.Decimal(15, 2)  // Rate at time of booking
-  monthlyRate     Decimal       @db.Decimal(15, 2)  // Rate at time of booking
-  totalAmount     Decimal       @db.Decimal(15, 2)  // Calculated total
-  status          BookingStatus @default(PENDING)
-  notes           String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id             String        @id @default(uuid())
+  companyId      String
+  vehicleId      String
+  customerId     String
+  invoiceId      String?       @unique // Link to generated invoice
+  bookingNumber  String // BK-2025-0001
+  startDate      DateTime
+  endDate        DateTime
+  totalDays      Int // Calculated: endDate - startDate
+  monthlyPeriods Int           @default(0) // Number of 30-day periods
+  remainingDays  Int           @default(0) // Days after monthly periods
+  dailyRate      Decimal       @db.Decimal(15, 2) // Rate at time of booking
+  weeklyRate     Decimal?      @db.Decimal(15, 2) // Weekly rate at booking
+  monthlyRate    Decimal       @db.Decimal(15, 2) // Rate at time of booking
+  totalAmount    Decimal       @db.Decimal(15, 2) // Calculated total
+  status         BookingStatus @default(PENDING)
+
+  // Location and logistics
+  pickupLocation  String?
+  dropoffLocation String?
+
+  // Payment and terms
+  paymentMethod String? // CASH, CREDIT_CARD, BANK_TRANSFER, etc.
+  termsAccepted Boolean @default(false)
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  company  Company   @relation(fields: [companyId], references: [id])
-  vehicle  Vehicle   @relation(fields: [vehicleId], references: [id])
-  customer Customer  @relation(fields: [customerId], references: [id])
-  invoice  Invoice?  @relation(fields: [invoiceId], references: [id])
+  company  Company        @relation(fields: [companyId], references: [id])
+  vehicle  Vehicle        @relation(fields: [vehicleId], references: [id])
+  customer Customer       @relation(fields: [customerId], references: [id])
+  invoice  Invoice?       @relation(fields: [invoiceId], references: [id])
+  addOns   BookingAddOn[]
 
   @@unique([companyId, bookingNumber])
   @@index([vehicleId, startDate, endDate])
   @@index([customerId])
   @@index([status])
   @@map("bookings")
+}
+
+// Booking add-ons (GPS, insurance, child seat, etc.)
+model BookingAddOn {
+  id          String   @id @default(uuid())
+  bookingId   String
+  addonName   String // GPS, Child Seat, Insurance, etc.
+  dailyRate   Decimal  @db.Decimal(15, 2)
+  quantity    Int      @default(1) // Usually number of days
+  totalAmount Decimal  @db.Decimal(15, 2)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@map("booking_addons")
 }

@@ -2,6 +2,12 @@ import { PrismaClient, Prisma, BookingStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { InvoiceService } from './invoice.service';
 
+export interface BookingAddOnInput {
+  addonName: string;
+  dailyRate: number;
+  quantity?: number;
+}
+
 export interface CreateBookingInput {
   companyId: string;
   vehicleId: string;
@@ -10,6 +16,12 @@ export interface CreateBookingInput {
   endDate: Date;
   notes?: string;
   userId: string;  // User creating the booking
+  // Additional fields from rent-a-car-mobile
+  pickupLocation?: string;
+  dropoffLocation?: string;
+  paymentMethod?: string;
+  termsAccepted?: boolean;
+  addOns?: BookingAddOnInput[];
 }
 
 export class BookingService {
@@ -203,11 +215,41 @@ export class BookingService {
             monthlyPeriods: rateCalculation.monthlyPeriods,
             remainingDays: rateCalculation.remainingDays,
             dailyRate: vehicle.dailyRate,
+            weeklyRate: vehicle.weeklyRate,
             monthlyRate: vehicle.monthlyRate,
             totalAmount: rateCalculation.totalAmount,
             status: BookingStatus.PENDING,
             notes: data.notes,
+            pickupLocation: data.pickupLocation,
+            dropoffLocation: data.dropoffLocation,
+            paymentMethod: data.paymentMethod,
+            termsAccepted: data.termsAccepted || false,
           },
+        });
+
+        // Create add-ons if provided
+        if (data.addOns && data.addOns.length > 0) {
+          const addOns = data.addOns.map((addon) => {
+            const quantity = addon.quantity || rateCalculation.totalDays;
+            const totalAmount = new Decimal(addon.dailyRate).times(quantity);
+            return {
+              bookingId: booking.id,
+              addonName: addon.addonName,
+              dailyRate: new Decimal(addon.dailyRate),
+              quantity,
+              totalAmount,
+            };
+          });
+
+          await tx.bookingAddOn.createMany({
+            data: addOns,
+          });
+        }
+
+        // Mark vehicle as booked
+        await tx.vehicle.update({
+          where: { id: data.vehicleId },
+          data: { isBooked: true },
         });
 
         return await tx.booking.findUnique({
@@ -215,6 +257,7 @@ export class BookingService {
           include: {
             vehicle: true,
             customer: true,
+            addOns: true,
             company: {
               select: {
                 id: true,

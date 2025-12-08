@@ -72,8 +72,41 @@ app.use(helmet({
   }
 }));
 
+// CORS configuration with dynamic origin validation
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || ['http://localhost:5173', 'http://localhost:5174'],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+
+    const allowedOrigins = process.env.CORS_ORIGIN?.split(',') || [];
+
+    // Development: Allow localhost on any port
+    if (process.env.NODE_ENV === 'development') {
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        return callback(null, true);
+      }
+    }
+
+    // Production: Only allow specific domains
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Production: Allow your production domains
+    const productionDomains = [
+      'https://vesla.com',
+      'https://www.vesla.com',
+      'https://app.vesla.com',
+      'https://rental.vesla.com'
+    ];
+
+    if (productionDomains.some(domain => origin.startsWith(domain))) {
+      return callback(null, true);
+    }
+
+    // Reject all other origins
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   maxAge: 86400, // 24 hours
 }));
