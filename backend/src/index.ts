@@ -30,6 +30,8 @@ import transactionRoutes from './routes/transaction.routes';
 import vehicleRoutes from './routes/vehicle.routes';
 import bookingRoutes from './routes/booking.routes';
 import internalRoutes from './routes/internal.routes';
+import userRoutes from './routes/user.routes';
+import adminRoutes from './routes/admin.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -41,7 +43,7 @@ const PORT = process.env.PORT || 3000;
 // Rate limiter for authentication endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 requests per window
+  max: process.env.NODE_ENV === 'development' ? 100 : 5, // 100 in dev, 5 in production
   message: 'Too many login attempts, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
@@ -192,6 +194,10 @@ app.get('/dashboards/accounting', (req: Request, res: Response) => {
   res.sendFile(path.join(dashboardsPath, 'accounting.html'));
 });
 
+app.get('/dashboards/admin', (req: Request, res: Response) => {
+  res.sendFile(path.join(dashboardsPath, 'admin.html'));
+});
+
 // Apply general rate limiter to all API routes (except health check)
 app.use('/api/', generalLimiter);
 
@@ -206,6 +212,8 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/internal', internalRoutes); // Internal routes (no JWT required)
+app.use('/api/users', userRoutes); // User management (ADMIN only)
+app.use('/api/admin', adminRoutes); // Admin dashboard (ADMIN only)
 
 // Error handling middleware (must be last)
 app.use(errorHandler);

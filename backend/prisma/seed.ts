@@ -10,22 +10,29 @@ async function main() {
   const hashedPassword = await bcrypt.hash('admin123', 10);
 
   const admin = await prisma.user.upsert({
-    where: { email: 'admin@vesla.com' },
-    update: {},
+    where: { email: 'admin@mrminvestment.com' },
+    update: { password: hashedPassword }, // Update password if user exists
     create: {
-      email: 'admin@vesla.com',
+      email: 'admin@mrminvestment.com',
       password: hashedPassword,
-      firstName: 'Admin',
-      lastName: 'User',
+      firstName: 'MRM',
+      lastName: 'Admin',
       role: 'ADMIN',
       isActive: true,
     },
   });
 
-  console.log('✅ Admin user created:');
-  console.log('   Email: admin@vesla.com');
-  console.log('   Password: admin123');
-  console.log('   Role: ADMIN');
+  console.log('✅ Default admin user created/verified:');
+  console.log('');
+  console.log('   📧 Email:    admin@mrminvestment.com');
+  console.log('   🔑 Password: admin123');
+  console.log('   👤 Role:     ADMIN');
+  console.log('');
+  console.log('   ⚠️  IMPORTANT: Change this password after first login!');
+  console.log('');
+  console.log('   🌐 Access admin dashboard at:');
+  console.log('      http://localhost:3000/dashboards/admin');
+  console.log('');
 
   // Create a default company
   const company = await prisma.company.upsert({

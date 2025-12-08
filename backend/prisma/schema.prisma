@@ -39,6 +39,9 @@ model User {
   createdTransactions Transaction[]    @relation("TransactionCreatedBy")
   auditLogs           AuditLog[]
   blacklistedTokens   TokenBlacklist[]
+  reportedIssues      Issue[]          @relation("IssueReportedBy")
+  assignedIssues      Issue[]          @relation("IssueAssignedTo")
+  issueComments       IssueComment[]   @relation("IssueCommentUser")
 
   @@map("users")
 }
@@ -548,4 +551,84 @@ model BookingAddOn {
 
   @@index([bookingId])
   @@map("booking_addons")
+}
+
+// ============================================
+// ISSUE TRACKING SYSTEM
+// ============================================
+
+enum IssuePriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  REOPENED
+}
+
+enum IssueType {
+  BUG
+  FEATURE_REQUEST
+  SUPPORT
+  SECURITY
+  PERFORMANCE
+  OTHER
+}
+
+model Issue {
+  id          String        @id @default(uuid())
+  title       String
+  description String
+  type        IssueType
+  priority    IssuePriority @default(MEDIUM)
+  status      IssueStatus   @default(OPEN)
+
+  // Issue tracking
+  reportedById  String // User who reported the issue
+  assignedToId  String? // User assigned to resolve the issue
+
+  // Metadata
+  environment   String? // production, staging, development
+  affectedUrl   String? // URL where issue occurred
+  stackTrace    String? // Error stack trace if applicable
+  browserInfo   String? // Browser/device information
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  resolvedAt DateTime?
+
+  // Relations
+  reportedBy User         @relation("IssueReportedBy", fields: [reportedById], references: [id])
+  assignedTo User?        @relation("IssueAssignedTo", fields: [assignedToId], references: [id])
+  comments   IssueComment[]
+
+  @@index([status, priority])
+  @@index([reportedById])
+  @@index([assignedToId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("issues")
+}
+
+model IssueComment {
+  id        String   @id @default(uuid())
+  issueId   String
+  userId    String
+  comment   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user  User  @relation("IssueCommentUser", fields: [userId], references: [id])
+
+  @@index([issueId, createdAt])
+  @@map("issue_comments")
 }
