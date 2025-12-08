@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import mongoSanitize from 'express-mongo-sanitize';
+import path from 'path';
 
 // Load environment variables
 dotenv.config();
@@ -28,6 +29,7 @@ import paymentRoutes from './routes/payment.routes';
 import transactionRoutes from './routes/transaction.routes';
 import vehicleRoutes from './routes/vehicle.routes';
 import bookingRoutes from './routes/booking.routes';
+import internalRoutes from './routes/internal.routes';
 
 // Import middleware
 import { errorHandler } from './middleware/error.middleware';
@@ -61,7 +63,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"], // Allow inline scripts for internal dashboards
       imgSrc: ["'self'", "data:", "https:"],
     }
   },
@@ -176,6 +178,20 @@ app.get('/health', async (req: Request, res: Response) => {
   });
 });
 
+// Serve internal dashboards (no authentication required)
+const dashboardsPath = path.join(__dirname, '../../dashboards');
+app.get('/dashboards', (req: Request, res: Response) => {
+  res.sendFile(path.join(dashboardsPath, 'index.html'));
+});
+
+app.get('/dashboards/bookings', (req: Request, res: Response) => {
+  res.sendFile(path.join(dashboardsPath, 'bookings.html'));
+});
+
+app.get('/dashboards/accounting', (req: Request, res: Response) => {
+  res.sendFile(path.join(dashboardsPath, 'accounting.html'));
+});
+
 // Apply general rate limiter to all API routes (except health check)
 app.use('/api/', generalLimiter);
 
@@ -189,6 +205,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/internal', internalRoutes); // Internal routes (no JWT required)
 
 // Error handling middleware (must be last)
 app.use(errorHandler);

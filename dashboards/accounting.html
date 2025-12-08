@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accounting Dashboard - Vesla ERP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #1a1a1a;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .filters {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .filter-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #555;
+            text-transform: uppercase;
+        }
+
+        .filter-group select,
+        .filter-group input,
+        .filter-group button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .filter-group button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .filter-group button:hover {
+            background: #2563eb;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .stat-card .label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1a1a1a;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: #f9fafb;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        th {
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #f3f4f6;
+            transition: background 0.2s;
+            cursor: pointer;
+        }
+
+        tbody tr:hover {
+            background: #f9fafb;
+        }
+
+        td {
+            padding: 12px 16px;
+            font-size: 14px;
+            color: #1f2937;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge.DRAFT { background: #f3f4f6; color: #6b7280; }
+        .badge.POSTED { background: #d1fae5; color: #065f46; }
+        .badge.VOID { background: #fee2e2; color: #991b1b; }
+
+        .badge.JOURNAL_VOUCHER { background: #dbeafe; color: #1e40af; }
+        .badge.INVOICE { background: #fef3c7; color: #92400e; }
+        .badge.PAYMENT { background: #d1fae5; color: #065f46; }
+        .badge.RECEIPT { background: #ddd6fe; color: #5b21b6; }
+
+        .loading, .error, .empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6b7280;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f4f6;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            color: #dc2626;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 30px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+
+        .pagination-info {
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .pagination-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .pagination button {
+            padding: 8px 16px;
+            border: 1px solid #d1d5db;
+            background: white;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: #f9fafb;
+            border-color: #9ca3af;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            overflow: auto;
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 800px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            padding: 20px 30px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-body {
+            padding: 30px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .close {
+            color: #9ca3af;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .close:hover {
+            color: #1f2937;
+        }
+
+        .detail-section {
+            margin-bottom: 30px;
+        }
+
+        .detail-section h3 {
+            font-size: 16px;
+            color: #1f2937;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .detail-item .label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .detail-item .value {
+            font-size: 14px;
+            color: #1f2937;
+            font-weight: 500;
+        }
+
+        .lines-table {
+            width: 100%;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .lines-table th {
+            background: #f9fafb;
+            padding: 10px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+        }
+
+        .lines-table td {
+            padding: 10px;
+            border-top: 1px solid #e5e7eb;
+            font-size: 13px;
+        }
+
+        .amount-debit {
+            color: #dc2626;
+            font-weight: 600;
+        }
+
+        .amount-credit {
+            color: #059669;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Accounting Dashboard</h1>
+            <p class="subtitle">View journal entries, transactions, and invoices</p>
+        </header>
+
+        <div class="filters">
+            <div class="filter-group">
+                <label>Company</label>
+                <select id="companyFilter">
+                    <option value="">All Companies</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Type</label>
+                <select id="typeFilter">
+                    <option value="">All Types</option>
+                    <option value="JOURNAL_VOUCHER">Journal Voucher</option>
+                    <option value="INVOICE">Invoice</option>
+                    <option value="PAYMENT">Payment</option>
+                    <option value="RECEIPT">Receipt</option>
+                    <option value="CONTRA">Contra</option>
+                    <option value="ADJUSTMENT">Adjustment</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Status</label>
+                <select id="statusFilter">
+                    <option value="">All Statuses</option>
+                    <option value="DRAFT">Draft</option>
+                    <option value="POSTED">Posted</option>
+                    <option value="VOID">Void</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Start Date</label>
+                <input type="date" id="startDate">
+            </div>
+
+            <div class="filter-group">
+                <label>End Date</label>
+                <input type="date" id="endDate">
+            </div>
+
+            <div class="filter-group">
+                <label>&nbsp;</label>
+                <button onclick="loadTransactions()">Apply Filters</button>
+            </div>
+
+            <div style="flex: 1;"></div>
+
+            <div class="filter-group">
+                <label>Auto-refresh</label>
+                <select id="autoRefresh" onchange="toggleAutoRefresh()">
+                    <option value="0">Off</option>
+                    <option value="30000">30 seconds</option>
+                    <option value="60000">1 minute</option>
+                    <option value="300000">5 minutes</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="label">Total Transactions</div>
+                <div class="value" id="totalCount">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Posted</div>
+                <div class="value" id="postedCount" style="color: #10b981;">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Draft</div>
+                <div class="value" id="draftCount" style="color: #6b7280;">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Void</div>
+                <div class="value" id="voidCount" style="color: #dc2626;">-</div>
+            </div>
+        </div>
+
+        <div class="table-container" id="tableContainer">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Loading transactions...</p>
+            </div>
+        </div>
+
+        <div class="pagination" id="pagination" style="display: none;">
+            <div class="pagination-info" id="paginationInfo">
+                Page 1 of 1
+            </div>
+            <div class="pagination-buttons">
+                <button id="prevBtn" onclick="prevPage()">Previous</button>
+                <button id="nextBtn" onclick="nextPage()">Next</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transaction Detail Modal -->
+    <div id="transactionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Transaction Details</h2>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Details will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api/internal';
+        let currentPage = 1;
+        let totalPages = 1;
+        let autoRefreshInterval = null;
+
+        // Format currency
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-AE', {
+                style: 'currency',
+                currency: 'AED',
+                minimumFractionDigits: 2
+            }).format(parseFloat(amount));
+        }
+
+        // Format date
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric'
+            });
+        }
+
+        // Load companies for filter
+        async function loadCompanies() {
+            try {
+                const response = await fetch(`${API_BASE}/companies`);
+                const result = await response.json();
+
+                if (result.success) {
+                    const select = document.getElementById('companyFilter');
+                    result.data.forEach(company => {
+                        const option = document.createElement('option');
+                        option.value = company.id;
+                        option.textContent = company.name;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading companies:', error);
+            }
+        }
+
+        // Load transactions
+        async function loadTransactions() {
+            const companyId = document.getElementById('companyFilter').value;
+            const type = document.getElementById('typeFilter').value;
+            const status = document.getElementById('statusFilter').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            const params = new URLSearchParams({
+                page: currentPage,
+                limit: 20
+            });
+
+            if (companyId) params.append('companyId', companyId);
+            if (type) params.append('type', type);
+            if (status) params.append('status', status);
+            if (startDate) params.append('startDate', startDate);
+            if (endDate) params.append('endDate', endDate);
+
+            try {
+                const response = await fetch(`${API_BASE}/transactions?${params}`);
+                const result = await response.json();
+
+                if (!result.success) {
+                    showError(result.message || 'Failed to load transactions');
+                    return;
+                }
+
+                const transactions = result.data;
+                totalPages = result.pagination.totalPages;
+
+                // Update stats
+                document.getElementById('totalCount').textContent = result.pagination.total;
+                updateStats(transactions);
+
+                // Render table
+                renderTable(transactions);
+
+                // Update pagination
+                updatePagination(result.pagination);
+
+            } catch (error) {
+                console.error('Error loading transactions:', error);
+                showError('Failed to connect to server. Please check if the backend is running.');
+            }
+        }
+
+        // Update statistics
+        function updateStats(transactions) {
+            const stats = transactions.reduce((acc, txn) => {
+                acc[txn.status] = (acc[txn.status] || 0) + 1;
+                return acc;
+            }, {});
+
+            document.getElementById('postedCount').textContent = stats.POSTED || 0;
+            document.getElementById('draftCount').textContent = stats.DRAFT || 0;
+            document.getElementById('voidCount').textContent = stats.VOID || 0;
+        }
+
+        // Render table
+        function renderTable(transactions) {
+            const container = document.getElementById('tableContainer');
+
+            if (transactions.length === 0) {
+                container.innerHTML = '<div class="empty">No transactions found</div>';
+                return;
+            }
+
+            const table = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Transaction #</th>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Company</th>
+                            <th>Description</th>
+                            <th>Entries</th>
+                            <th>Status</th>
+                            <th>Created By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${transactions.map(txn => {
+                            const totalDebit = txn.lines.reduce((sum, line) => sum + parseFloat(line.debit || 0), 0);
+                            const totalCredit = txn.lines.reduce((sum, line) => sum + parseFloat(line.credit || 0), 0);
+
+                            return `
+                                <tr onclick="showTransactionDetails('${txn.id}')">
+                                    <td><strong>${txn.number}</strong></td>
+                                    <td>${formatDate(txn.date)}</td>
+                                    <td><span class="badge ${txn.type}">${txn.type.replace('_', ' ')}</span></td>
+                                    <td>${txn.company?.name || 'N/A'}</td>
+                                    <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        ${txn.description || '-'}
+                                    </td>
+                                    <td>
+                                        <div style="font-size: 12px;">
+                                            <span class="amount-debit">DR: ${formatCurrency(totalDebit)}</span><br>
+                                            <span class="amount-credit">CR: ${formatCurrency(totalCredit)}</span>
+                                        </div>
+                                    </td>
+                                    <td><span class="badge ${txn.status}">${txn.status}</span></td>
+                                    <td>
+                                        <div style="font-size: 12px;">
+                                            ${txn.createdBy?.name || 'System'}<br>
+                                            <span style="color: #9ca3af;">${formatDate(txn.createdAt)}</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            container.innerHTML = table;
+        }
+
+        // Show transaction details in modal
+        async function showTransactionDetails(transactionId) {
+            try {
+                const response = await fetch(`${API_BASE}/transactions/${transactionId}`);
+                const result = await response.json();
+
+                if (!result.success) {
+                    alert('Failed to load transaction details');
+                    return;
+                }
+
+                const txn = result.data;
+                const totalDebit = txn.lines.reduce((sum, line) => sum + parseFloat(line.debit || 0), 0);
+                const totalCredit = txn.lines.reduce((sum, line) => sum + parseFloat(line.credit || 0), 0);
+
+                const modalBody = document.getElementById('modalBody');
+                modalBody.innerHTML = `
+                    <div class="detail-section">
+                        <h3>Transaction Information</h3>
+                        <div class="detail-grid">
+                            <div class="detail-item">
+                                <span class="label">Transaction Number</span>
+                                <span class="value">${txn.number}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">Date</span>
+                                <span class="value">${formatDate(txn.date)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">Type</span>
+                                <span class="value"><span class="badge ${txn.type}">${txn.type.replace('_', ' ')}</span></span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">Status</span>
+                                <span class="value"><span class="badge ${txn.status}">${txn.status}</span></span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">Company</span>
+                                <span class="value">${txn.company?.name || 'N/A'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="label">Created By</span>
+                                <span class="value">${txn.createdBy?.name || 'System'}</span>
+                            </div>
+                            <div class="detail-item" style="grid-column: 1 / -1;">
+                                <span class="label">Description</span>
+                                <span class="value">${txn.description || '-'}</span>
+                            </div>
+                            <div class="detail-item" style="grid-column: 1 / -1;">
+                                <span class="label">Narration</span>
+                                <span class="value">${txn.narration || '-'}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h3>Transaction Lines</h3>
+                        <table class="lines-table">
+                            <thead>
+                                <tr>
+                                    <th>Account Code</th>
+                                    <th>Account Name</th>
+                                    <th>Debit</th>
+                                    <th>Credit</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${txn.lines.map(line => `
+                                    <tr>
+                                        <td><strong>${line.account.code}</strong></td>
+                                        <td>${line.account.name}</td>
+                                        <td class="amount-debit">${line.debit ? formatCurrency(line.debit) : '-'}</td>
+                                        <td class="amount-credit">${line.credit ? formatCurrency(line.credit) : '-'}</td>
+                                    </tr>
+                                `).join('')}
+                                <tr style="background: #f9fafb; font-weight: bold;">
+                                    <td colspan="2" style="text-align: right;">TOTAL</td>
+                                    <td class="amount-debit">${formatCurrency(totalDebit)}</td>
+                                    <td class="amount-credit">${formatCurrency(totalCredit)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                document.getElementById('modalTitle').textContent = `Transaction: ${txn.number}`;
+                document.getElementById('transactionModal').style.display = 'block';
+
+            } catch (error) {
+                console.error('Error loading transaction details:', error);
+                alert('Failed to load transaction details');
+            }
+        }
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('transactionModal').style.display = 'none';
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('transactionModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+
+        // Show error
+        function showError(message) {
+            const container = document.getElementById('tableContainer');
+            container.innerHTML = `<div class="error">${message}</div>`;
+        }
+
+        // Update pagination
+        function updatePagination(pagination) {
+            const paginationEl = document.getElementById('pagination');
+            const infoEl = document.getElementById('paginationInfo');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+
+            if (pagination.totalPages > 1) {
+                paginationEl.style.display = 'flex';
+                infoEl.textContent = `Page ${pagination.page} of ${pagination.totalPages} (${pagination.total} total)`;
+                prevBtn.disabled = pagination.page === 1;
+                nextBtn.disabled = pagination.page === pagination.totalPages;
+            } else {
+                paginationEl.style.display = 'none';
+            }
+        }
+
+        // Pagination controls
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                loadTransactions();
+            }
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages) {
+                currentPage++;
+                loadTransactions();
+            }
+        }
+
+        // Auto-refresh toggle
+        function toggleAutoRefresh() {
+            const interval = parseInt(document.getElementById('autoRefresh').value);
+
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+            }
+
+            if (interval > 0) {
+                autoRefreshInterval = setInterval(loadTransactions, interval);
+                console.log(`Auto-refresh enabled: ${interval/1000}s`);
+            }
+        }
+
+        // Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            loadCompanies();
+            loadTransactions();
+        });
+    </script>
+</body>
+</html>
