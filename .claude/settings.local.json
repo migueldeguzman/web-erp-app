@@ -49,7 +49,12 @@
       "Bash(npx tsx:*)",
       "Bash(if not exist web mkdir web)",
       "Bash(del app.css)",
-      "Bash(if exist app.css del app.css)"
+      "Bash(if exist app.css del app.css)",
+      "Bash(start http://localhost:3000/dashboards/admin)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(start http://localhost:5173)"
     ],
     "deny": [],
     "ask": []

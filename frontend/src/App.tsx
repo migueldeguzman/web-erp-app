@@ -7,6 +7,12 @@ import PaymentsPage from './pages/PaymentsPage';
 import TransactionsPage from './pages/TransactionsPage';
 import BookingsPage from './pages/BookingsPage';
 import Layout from './components/Layout';
+import AdminLayout from './components/AdminLayout';
+import AdminDashboardPage from './pages/admin/AdminDashboardPage';
+import UserManagementPage from './pages/admin/UserManagementPage';
+import AuditLogsPage from './pages/admin/AuditLogsPage';
+import IssueTrackerPage from './pages/admin/IssueTrackerPage';
+import SystemHealthPage from './pages/admin/SystemHealthPage';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
@@ -30,6 +36,25 @@ function App() {
         <Route path="payments" element={<PaymentsPage />} />
         <Route path="transactions" element={<TransactionsPage />} />
         <Route path="bookings" element={<BookingsPage />} />
+      </Route>
+
+      <Route
+        path="/admin"
+        element={
+          isAuthenticated ? (
+            <Layout />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      >
+        <Route element={<AdminLayout />}>
+          <Route index element={<AdminDashboardPage />} />
+          <Route path="users" element={<UserManagementPage />} />
+          <Route path="audit-logs" element={<AuditLogsPage />} />
+          <Route path="issues" element={<IssueTrackerPage />} />
+          <Route path="system-health" element={<SystemHealthPage />} />
+        </Route>
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
