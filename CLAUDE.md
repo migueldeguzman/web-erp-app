@@ -83,6 +83,13 @@ web-erp-app/
 - `/api/invoices` - Invoice management
 - `/api/payments` - Payment processing
 - `/api/transactions` - Journal vouchers and general ledger
+- `/api/users` - User management (ADMIN only)
+- `/api/admin` - Admin dashboard endpoints (ADMIN only)
+  - `/api/admin/dashboard/stats` - Dashboard statistics
+  - `/api/admin/system/health` - System health monitoring
+  - `/api/admin/audit-logs` - Audit log retrieval with filters
+  - `/api/admin/activity/*` - Activity tracking endpoints
+  - `/api/admin/issues` - Issue tracking system
 
 **Security Layers (src/index.ts):**
 - `helmet` - Security headers (CSP, HSTS)
@@ -103,12 +110,22 @@ web-erp-app/
 - Zustand for state management (with persist middleware)
 
 **Key Structure:**
-- `src/App.tsx` - Main router with protected route logic
-- `src/components/Layout.tsx` - Main layout wrapper with navigation
-- `src/pages/` - Page components (Dashboard, Invoices, Payments, Transactions, Login)
+- `src/App.tsx` - Main router with protected route logic and admin routes
+- `src/components/Layout.tsx` - Main layout wrapper with navigation (includes Admin Panel button for ADMIN users)
+- `src/components/AdminLayout.tsx` - Admin panel layout with role-based access control
+- `src/pages/` - Page components (Dashboard, Invoices, Payments, Transactions, Bookings, Login)
+- `src/pages/admin/` - Admin panel pages (ADMIN role only)
+  - `AdminDashboardPage.tsx` - Admin dashboard with comprehensive statistics
+  - `UserManagementPage.tsx` - User CRUD operations with activity tracking
+  - `AuditLogsPage.tsx` - System audit log viewer with advanced filtering
+  - `IssueTrackerPage.tsx` - Issue management with comments and status tracking
+  - `SystemHealthPage.tsx` - System health monitoring and database metrics
 - `src/stores/authStore.ts` - Zustand store for authentication state (persisted to localStorage)
 - `src/services/api.ts` - Axios instance with auth interceptors
 - `src/services/authService.ts` - Authentication API calls
+- `src/services/adminService.ts` - Admin dashboard API calls
+- `src/services/userService.ts` - User management API calls
+- `src/services/issueService.ts` - Issue tracking API calls
 
 **Authentication Flow:**
 1. User logs in via `LoginPage` → calls `authService.login()`
@@ -167,6 +184,19 @@ web-erp-app/
 9. **TokenBlacklist** (token_blacklist table)
    - JWT token revocation for logout and user deactivation
    - Automatic cleanup of expired tokens (runs hourly via `auth.middleware.ts`)
+
+10. **Issue** (issues table)
+   - Bug tracking and feature request management
+   - Types: BUG, FEATURE_REQUEST, SUPPORT, SECURITY, PERFORMANCE, OTHER
+   - Priority: LOW, MEDIUM, HIGH, CRITICAL
+   - Status: OPEN, IN_PROGRESS, RESOLVED, CLOSED
+   - Has IssueComment children for discussion threads
+   - Links to User (reportedBy, assignedTo)
+
+11. **IssueComment** (issue_comments table)
+   - Comments on issues
+   - Links to Issue and User
+   - Timestamp tracking for conversation history
 
 **Key Relationships:**
 - Transaction ←1:1→ Invoice (invoice posting creates transaction)
@@ -501,6 +531,399 @@ Every significant action is logged to the `audit_logs` table via `AuditService`:
 - `InvoiceService` - Logs creation, posting, voiding, and failed attempts
 - `PaymentService` - Logs payment recording and reconciliation
 - `AuthService` - Logs login/logout events
+- `UserService` - Logs user creation, updates, activation/deactivation
+- `IssueService` - Logs issue creation, updates, comments
+
+---
+
+## Admin Dashboard
+
+### Overview
+
+The admin dashboard provides comprehensive system administration capabilities with role-based access control. Only users with the **ADMIN** role can access these features.
+
+**Access URL:** `http://localhost:5173/admin`
+
+**Features:**
+- Real-time system statistics and metrics
+- User management with full CRUD operations
+- Complete audit trail viewer
+- Issue tracking system
+- System health monitoring
+
+### Admin Dashboard Pages
+
+#### 1. **Dashboard Overview** (`/admin`)
+
+Displays comprehensive system statistics:
+
+**User Metrics:**
+- Total users, active/inactive counts
+- User breakdown by role (ADMIN, MANAGER, ACCOUNTANT, VIEWER)
+
+**Company & Customer Metrics:**
+- Total companies and active status
+- Total customers with KYC verification status
+
+**Accounting Metrics:**
+- Total transactions (posted, draft)
+- Total invoices and payments
+
+**Rental Metrics:**
+- Total vehicles (available, rented)
+- Total bookings and active bookings
+
+**Audit Metrics:**
+- Today's audit log count
+- Failed login attempts
+
+**Quick Actions:**
+- Links to all admin sections
+- Visual navigation cards
+
+#### 2. **User Management** (`/admin/users`)
+
+Complete user administration with CRUD operations:
+
+**Features:**
+- **List Users** - Paginated table with role and status badges
+- **Create User** - Modal form with email, name, password, role selection
+- **Edit User** - Update user details (password optional)
+- **View Activity** - User statistics and recent activity logs
+  - Total transactions, invoices, payments created
+  - Total login count
+  - Recent activity timeline
+- **Activate/Deactivate** - Toggle user account status
+- **Delete User** - Permanent deletion (with confirmation)
+
+**Filtering:**
+- Search by email or name
+- Filter by role (ADMIN, MANAGER, ACCOUNTANT, VIEWER)
+- Filter by status (Active/Inactive)
+
+**Pagination:**
+- Configurable page size (default: 20 per page)
+- Page navigation controls
+
+**Security:**
+- Admins cannot deactivate or delete themselves
+- All actions logged to audit trail
+
+**Backend API:**
+```
+GET    /api/users              - List users (with filters)
+GET    /api/users/:id          - Get user details
+POST   /api/users              - Create user
+PUT    /api/users/:id          - Update user
+POST   /api/users/:id/deactivate - Deactivate user
+POST   /api/users/:id/reactivate - Reactivate user
+DELETE /api/users/:id          - Delete user (permanent)
+GET    /api/users/:id/activity - Get user activity
+GET    /api/users/:id/stats    - Get user statistics
+```
+
+#### 3. **Audit Logs** (`/admin/audit-logs`)
+
+Complete system activity tracking and audit trail:
+
+**Features:**
+- **View All Logs** - Paginated list of all system activities
+- **Advanced Filtering:**
+  - Date range picker (start/end date)
+  - Action type (CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.)
+  - Entity type (User, Transaction, Invoice, Payment, etc.)
+  - Search by entity ID
+- **View Details** - Modal showing before/after values in JSON format
+- **Export to CSV** - Download filtered audit logs
+
+**Displayed Information:**
+- User who performed the action (email, name)
+- Action type with color-coded badges
+- Entity affected
+- Entity ID
+- Timestamp
+- IP address and User-Agent
+
+**Backend API:**
+```
+GET /api/admin/audit-logs?page=1&limit=20&action=CREATE&entity=User&startDate=2025-01-01&endDate=2025-12-31&search=john
+```
+
+#### 4. **Issue Tracker** (`/admin/issues`)
+
+Bug tracking and feature request management system:
+
+**Features:**
+- **Create Issue** - New issue form with:
+  - Title and description
+  - Type (BUG, FEATURE_REQUEST, SUPPORT, SECURITY, PERFORMANCE, OTHER)
+  - Priority (LOW, MEDIUM, HIGH, CRITICAL)
+  - Assignee selection
+  - Environment details
+  - Affected URL
+  - Stack trace (for bugs)
+  - Browser information
+- **View Issue Details** - Modal with:
+  - Complete issue information
+  - Comments section (threaded discussion)
+  - Add comment functionality
+  - Comment history with timestamps
+- **Update Issue** - Inline status and priority updates
+- **Delete Issue** - Remove issue (with confirmation)
+- **Filter Issues:**
+  - By status (OPEN, IN_PROGRESS, RESOLVED, CLOSED)
+  - By priority (LOW, MEDIUM, HIGH, CRITICAL)
+  - By type
+  - By assignee
+  - Search by title/description
+- **Issue Statistics** - Dashboard showing:
+  - Total issues
+  - Breakdown by status
+  - Breakdown by priority
+  - Breakdown by type
+
+**Color Coding:**
+- **Status:** OPEN (blue), IN_PROGRESS (yellow), RESOLVED (green), CLOSED (gray)
+- **Priority:** LOW (gray), MEDIUM (blue), HIGH (orange), CRITICAL (red)
+
+**Backend API:**
+```
+GET    /api/admin/issues           - List issues (with filters)
+GET    /api/admin/issues/stats     - Get issue statistics
+GET    /api/admin/issues/:id       - Get issue details
+POST   /api/admin/issues           - Create issue
+PUT    /api/admin/issues/:id       - Update issue
+DELETE /api/admin/issues/:id       - Delete issue
+POST   /api/admin/issues/:id/comments - Add comment
+```
+
+#### 5. **System Health** (`/admin/system-health`)
+
+Real-time system monitoring and health checks:
+
+**Features:**
+- **Database Health:**
+  - Connection status (Connected/Disconnected)
+  - Response time in milliseconds
+  - Visual health indicator (green/red)
+- **Table Record Counts:**
+  - Users
+  - Companies
+  - Customers
+  - Vehicles
+  - Bookings
+  - Transactions
+  - Invoices
+  - Payments
+  - Audit Logs
+- **System Information:**
+  - Database type (PostgreSQL)
+  - Environment (development/production)
+  - Last backup timestamp (if available)
+- **Maintenance Actions:**
+  - Optimize database (placeholder)
+  - Clear cache (placeholder)
+  - Run backup (placeholder)
+  - Refresh button to reload data
+
+**Backend API:**
+```
+GET /api/admin/system/health - Get system health status
+GET /api/admin/dashboard/stats - Get comprehensive statistics
+```
+
+### Admin Services (Frontend)
+
+#### **adminService.ts**
+
+Handles admin dashboard API calls:
+
+```typescript
+getDashboardStats()              // Get comprehensive dashboard statistics
+getSystemHealth()                // Get system health status
+getAuditLogs(page, limit, filters) // Get audit logs with filtering
+getRecentActivity(limit)         // Get recent activity (last 24 hours)
+getLoginHistory(page, limit)     // Get login history
+getFailedLogins(page, limit)     // Get failed login attempts
+getStatsByDateRange(start, end)  // Get stats for date range
+getMostActiveUsers(limit)        // Get most active users
+```
+
+#### **userService.ts**
+
+Handles user management operations:
+
+```typescript
+listUsers(page, limit, filters)  // List users with pagination
+getUserById(id)                  // Get single user details
+createUser(userData)             // Create new user
+updateUser(id, userData)         // Update user details
+deactivateUser(id)               // Deactivate user account
+reactivateUser(id)               // Reactivate user account
+deleteUser(id)                   // Delete user permanently
+getUserActivity(id, page, limit) // Get user activity logs
+getUserStats(id)                 // Get user statistics
+```
+
+#### **issueService.ts**
+
+Handles issue tracking operations:
+
+```typescript
+listIssues(page, limit, filters) // List issues with pagination
+getIssueById(id)                 // Get issue details with comments
+createIssue(issueData)           // Create new issue
+updateIssue(id, issueData)       // Update issue
+deleteIssue(id)                  // Delete issue
+addComment(id, comment)          // Add comment to issue
+getIssueStats()                  // Get issue statistics
+```
+
+### Role-Based Access Control
+
+**Admin Panel Access:**
+- Only users with `role === 'ADMIN'` can access admin dashboard
+- AdminLayout component checks role and redirects non-admin users
+- Admin Panel button only visible to ADMIN users in main navigation
+- All admin API endpoints protected with `authenticate` + `authorize('ADMIN')` middleware
+
+**Route Protection:**
+```typescript
+// App.tsx
+<Route path="/admin" element={isAuthenticated ? <Layout /> : <Navigate to="/login" />}>
+  <Route element={<AdminLayout />}>  {/* Checks for ADMIN role */}
+    <Route index element={<AdminDashboardPage />} />
+    <Route path="users" element={<UserManagementPage />} />
+    <Route path="audit-logs" element={<AuditLogsPage />} />
+    <Route path="issues" element={<IssueTrackerPage />} />
+    <Route path="system-health" element={<SystemHealthPage />} />
+  </Route>
+</Route>
+```
+
+### Admin Backend Services
+
+#### **AdminService** (`services/admin.service.ts`)
+
+Provides dashboard statistics and system health monitoring:
+
+**Methods:**
+- `getDashboardStats()` - Aggregates user, company, customer, accounting, rental, and audit metrics
+- `getSystemHealth()` - Tests database connection and returns table counts
+- `getAuditLogs(page, limit, filters)` - Retrieves filtered audit logs with user details
+- `getRecentActivity(limit)` - Gets last 24 hours of activity
+- `getLoginHistory(page, limit)` - Retrieves login/logout events
+- `getFailedLogins(page, limit)` - Gets failed login attempts
+- `getStatsByDateRange(startDate, endDate)` - Statistics for specific period
+- `getMostActiveUsers(limit)` - Users sorted by activity count
+
+#### **UserService** (`services/user.service.ts`)
+
+Manages user accounts with full CRUD operations:
+
+**Methods:**
+- `listUsers(page, limit, filters)` - Paginated user list with role/status filtering
+- `getUserById(id)` - User details with created records count
+- `createUser(userData, auditContext)` - Creates user and logs action
+- `updateUser(id, userData, auditContext)` - Updates user and logs changes
+- `deactivateUser(id, auditContext)` - Deactivates user and blacklists tokens
+- `reactivateUser(id, auditContext)` - Reactivates user account
+- `deleteUser(id, auditContext)` - Permanent deletion (logs action)
+- `getUserActivity(id, page, limit)` - User's audit log entries
+- `getUserStats(id)` - Aggregated statistics (transactions, invoices, logins)
+
+**Self-Protection:**
+- Prevents admins from deactivating/deleting themselves
+- Checked in controller before calling service
+
+#### **IssueService** (`services/issue.service.ts`)
+
+Manages bug tracking and feature requests:
+
+**Methods:**
+- `listIssues(page, limit, filters)` - Filtered issue list with assignee/reporter details
+- `getIssueById(id)` - Issue with all comments and user details
+- `createIssue(issueData, auditContext)` - Creates issue and logs action
+- `updateIssue(id, issueData, auditContext)` - Updates issue and logs changes
+- `deleteIssue(id, auditContext)` - Deletes issue and logs action
+- `addComment(id, userId, comment, auditContext)` - Adds comment to issue
+- `getIssueStats()` - Statistics by status, priority, and type
+
+### Security Features
+
+**Authentication & Authorization:**
+- All admin endpoints require valid JWT token
+- `authenticate` middleware validates token and checks user status
+- `authorize('ADMIN')` middleware ensures user has ADMIN role
+- Token blacklist prevents use of old tokens after logout
+
+**Audit Logging:**
+- All admin actions logged to audit_logs table
+- Includes IP address, User-Agent, before/after values
+- Failed operations also logged with error details
+
+**Data Protection:**
+- Passwords hashed with bcrypt (10 rounds)
+- Sensitive fields never returned in API responses
+- Self-protection prevents accidental account lockout
+
+**Rate Limiting:**
+- 100 requests per 15 minutes on admin endpoints
+- 5 login attempts per 15 minutes
+
+### UI/UX Features
+
+**Design:**
+- Modern TailwindCSS styling
+- Fully responsive (mobile, tablet, desktop)
+- Consistent color scheme matching main application
+- Dark admin navigation bar for visual distinction
+
+**User Experience:**
+- Loading spinners during API calls
+- Error messages with user-friendly explanations
+- Success notifications with auto-dismiss
+- Modal dialogs for create/edit operations
+- Empty states with helpful messages
+- Color-coded badges for status/role/priority
+- Smooth animations and transitions
+- Keyboard navigation support
+
+**Performance:**
+- Pagination for large datasets
+- Lazy loading of detail views
+- Efficient API queries with Prisma includes
+- Client-side filtering where appropriate
+
+### Testing Admin Dashboard
+
+**Access:**
+1. Navigate to `http://localhost:5173`
+2. Login with admin credentials: `admin@vesla.com` / `admin123`
+3. Click "Admin Panel" button (dark button in top-right navigation)
+4. Navigate between admin sections using admin navigation bar
+
+**Test CRUD Operations:**
+```bash
+# Create user
+POST /api/users
+{"email":"test@example.com","password":"test123","firstName":"Test","lastName":"User","role":"VIEWER"}
+
+# List users
+GET /api/users?page=1&limit=20&role=ADMIN&isActive=true
+
+# View audit logs
+GET /api/admin/audit-logs?page=1&limit=20&action=CREATE&entity=User
+
+# Create issue
+POST /api/admin/issues
+{"title":"Test Bug","description":"Test description","type":"BUG","priority":"HIGH"}
+
+# Get dashboard stats
+GET /api/admin/dashboard/stats
+```
+
+---
 
 ## Debugging Tips
 
