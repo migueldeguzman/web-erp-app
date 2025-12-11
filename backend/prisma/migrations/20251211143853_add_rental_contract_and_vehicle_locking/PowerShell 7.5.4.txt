@@ -1,0 +1,164 @@
+PowerShell 7.5.4
+PS C:\Users\DELL> cd vesla-audit/web-erp-app
+PS C:\Users\DELL\vesla-audit\web-erp-app> cd backend
+PS C:\Users\DELL\vesla-audit\web-erp-app\backend> npx prisma migrate dev --name add_rental_contract_and_vehicle_locking
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "neondb", schema "public" at "ep-still-recipe-a9gv66gx-pooler.gwc.azure.neon.tech"
+
+Drift detected: Your database schema is not in sync with your migration history.
+
+The following is a summary of the differences between the expected database schema given your migrations files, and the actual schema of the database.
+
+It should be understood as the set of changes to get from the expected schema to the actual schema.
+
+[+] Added enums
+  - IssuePriority
+  - IssueStatus
+  - IssueType
+
+[+] Added tables
+  - booking_addons
+  - issue_comments
+  - issues
+
+[*] Changed the `booking_addons` table
+  [+] Added index on columns (bookingId)
+  [+] Added foreign key on columns (bookingId)
+
+[*] Changed the `bookings` table
+  [+] Added column `dropoffLocation`
+  [+] Added column `paymentMethod`
+  [+] Added column `pickupLocation`
+  [+] Added column `termsAccepted`
+  [+] Added column `weeklyRate`
+  [*] Altered column `monthlyPeriods` (default changed from `None` to `Some(Value(Int(0)))`)
+  [*] Altered column `remainingDays` (default changed from `None` to `Some(Value(Int(0)))`)
+
+[*] Changed the `customers` table
+  [-] Removed foreign key on columns (companyId)
+  [-] Removed unique index on columns (companyId, code)
+  [+] Added column `bankProvider`
+  [+] Added column `cardHolderName`
+  [+] Added column `cardLast4`
+  [+] Added column `cardType`
+  [+] Added column `dateOfBirth`
+  [+] Added column `driversLicenseCountry`
+  [+] Added column `emiratesId`
+  [+] Added column `firstName`
+  [+] Added column `isTourist`
+  [+] Added column `kycVerified`
+  [+] Added column `kycVerifiedAt`
+  [+] Added column `lastName`
+  [+] Added column `licenseExpiry`
+  [+] Added column `licenseNumber`
+  [+] Added column `mobileNumber`
+  [+] Added column `nationality`
+  [+] Added column `passportCountry`
+  [+] Added column `passportNumber`
+  [+] Added column `passwordHash`
+  [+] Added column `role`
+  [*] Altered column `companyId` (changed from Required to Nullable)
+  [*] Altered column `email` (changed from Nullable to Required)
+  [+] Added unique index on columns (code)
+  [+] Added index on columns (email)
+  [+] Added unique index on columns (email)
+  [+] Added index on columns (emiratesId)
+  [+] Added unique index on columns (emiratesId)
+  [+] Added index on columns (passportNumber)
+  [+] Added unique index on columns (passportNumber)
+  [+] Added foreign key on columns (companyId)
+
+[*] Changed the `issue_comments` table
+  [+] Added index on columns (issueId, createdAt)
+  [+] Added foreign key on columns (issueId)
+  [+] Added foreign key on columns (userId)
+
+[*] Changed the `issues` table
+  [+] Added index on columns (assignedToId)
+  [+] Added index on columns (createdAt)
+  [+] Added index on columns (reportedById)
+  [+] Added index on columns (status, priority)
+  [+] Added index on columns (type)
+  [+] Added foreign key on columns (assignedToId)
+  [+] Added foreign key on columns (reportedById)
+
+[*] Changed the `vehicles` table
+  [+] Added column `category`
+  [+] Added column `fuelType`
+  [+] Added column `isBooked`
+  [+] Added column `mileage`
+  [+] Added column `seats`
+  [+] Added column `transmission`
+  [+] Added column `vin`
+  [+] Added column `weeklyRate`
+  [+] Added index on columns (status, isBooked)
+  [+] Added unique index on columns (vin)
+
+√ We need to reset the "public" schema at "ep-still-recipe-a9gv66gx-pooler.gwc.azure.neon.tech"
+Do you want to continue? All data will be lost. ... yes
+
+Applying migration `20251204083330_init`
+Applying migration `20251204084827_add_vehicle_booking_system`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20251204083330_init/
+    └─ migration.sql
+  └─ 20251204084827_add_vehicle_booking_system/
+    └─ migration.sql
+
+⚠️  Warnings for the current datasource:
+
+  • The values [CONFIRMED,ACTIVE,COMPLETED] on the enum `BookingStatus` will be removed. If these variants are still used in the database, this will fail.
+  • A unique constraint covering the columns `[rentalContractId]` on the table `bookings` will be added. If there are existing duplicate values, this will fail.
+  • A unique constraint covering the columns `[code]` on the table `customers` will be added. If there are existing duplicate values, this will fail.
+  • A unique constraint covering the columns `[email]` on the table `customers` will be added. If there are existing duplicate values, this will fail.
+  • A unique constraint covering the columns `[emiratesId]` on the table `customers` will be added. If there are existing duplicate values, this will fail.
+  • A unique constraint covering the columns `[passportNumber]` on the table `customers` will be added. If there are existing duplicate values, this will fail.
+  • A unique constraint covering the columns `[vin]` on the table `vehicles` will be added. If there are existing duplicate values, this will fail.
+
+√ Are you sure you want to create and apply this migration? ... yes
+Applying migration `20251211143853_add_rental_contract_and_vehicle_locking`
+
+
+The following migration(s) have been created and applied from new schema changes:
+
+migrations/
+  └─ 20251211143853_add_rental_contract_and_vehicle_locking/
+    └─ migration.sql
+
+Your database is now in sync with your schema.
+
+EPERM: operation not permitted, rename 'C:\Users\DELL\vesla-audit\web-erp-app\node_modules\.prisma\client\query_engine-w
+indows.dll.node.tmp28504' -> 'C:\Users\DELL\vesla-audit\web-erp-app\node_modules\.prisma\client\query_engine-windows.dll
+.node'
+
+
+Running seed command `tsx prisma/seed.ts` ...
+🌱 Starting database seed...
+✅ Default admin user created/verified:
+
+   📧 Email:    admin@mrminvestment.com
+   🔑 Password: admin123
+   👤 Role:     ADMIN
+
+   ⚠️  IMPORTANT: Change this password after first login!
+
+   🌐 Access admin dashboard at:
+      http://localhost:3000/dashboards/admin
+
+✅ Default company created:
+   Code: VESLA
+   Name: Vesla Motors
+✅ Test vehicles created:
+   Nissan Sunny 2024 - AED 150/day, AED 3000/month
+   Toyota Camry 2024 - AED 200/day, AED 4500/month
+   Honda Accord 2024 - AED 180/day, AED 4000/month
+
+✨ Seed completed successfully!
+
+The seed command has been executed.
+
+PS C:\Users\DELL\vesla-audit\web-erp-app\backend>

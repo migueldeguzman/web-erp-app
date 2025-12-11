@@ -1,6 +1,8 @@
 import { PrismaClient, Prisma, BookingStatus } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { InvoiceService } from './invoice.service';
+import vehicleLockingService from './vehicle-locking.service';
+import companySettingsService from './company-settings.service';
 
 export interface BookingAddOnInput {
   addonName: string;
@@ -152,6 +154,12 @@ export class BookingService {
           throw new Error(`Vehicle is not available (status: ${vehicle.status})`);
         }
 
+        // Check vehicle lock status
+        const isAvailable = await vehicleLockingService.isVehicleAvailable(data.vehicleId);
+        if (!isAvailable) {
+          throw new Error(`Vehicle is currently locked or unavailable`);
+        }
+
         // Verify customer exists
         const customer = await tx.customer.findUnique({
           where: { id: data.customerId },
@@ -209,6 +217,25 @@ export class BookingService {
           throw new Error('Vehicle is already booked for this period');
         }
 
+        // Get company settings for auto-assign and temp lock
+        const settings = await companySettingsService.getSettings(data.companyId);
+        const tempLockDuration = settings.tempLockDurationMinutes;
+
+        // Calculate lock expiration
+        const lockedUntil = new Date();
+        lockedUntil.setMinutes(lockedUntil.getMinutes() + tempLockDuration);
+
+        // Auto-assign specific vehicle if enabled (gets first available of same type)
+        let assignedVehicleId: string | null = null;
+        if (settings.autoAssignVehicle) {
+          assignedVehicleId = await vehicleLockingService.autoAssignVehicle(
+            data.companyId,
+            vehicle.make,
+            vehicle.model,
+            vehicle.category || undefined
+          );
+        }
+
         // Calculate rental rate
         const rateCalculation = this.calculateRate(
           data.startDate,
@@ -242,6 +269,8 @@ export class BookingService {
             dropoffLocation: data.dropoffLocation,
             paymentMethod: data.paymentMethod,
             termsAccepted: data.termsAccepted || false,
+            assignedVehicleId,
+            lockedUntil,
           },
         });
 
@@ -267,11 +296,12 @@ export class BookingService {
           });
         }
 
-        // Mark vehicle as booked
-        await tx.vehicle.update({
-          where: { id: data.vehicleId },
-          data: { isBooked: true },
-        });
+        // Temporarily lock the vehicle
+        await vehicleLockingService.tempLockVehicle(
+          data.vehicleId,
+          data.companyId,
+          tempLockDuration
+        );
 
         return await tx.booking.findUnique({
           where: { id: booking.id },

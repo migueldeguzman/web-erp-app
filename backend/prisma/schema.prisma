@@ -63,13 +63,15 @@ model Company {
   updatedAt DateTime @updatedAt
 
   // Relations
-  accounts     Account[]
-  invoices     Invoice[]
-  payments     Payment[]
-  transactions Transaction[]
-  customers    Customer[]
-  vehicles     Vehicle[]
-  bookings     Booking[]
+  accounts        Account[]
+  invoices        Invoice[]
+  payments        Payment[]
+  transactions    Transaction[]
+  customers       Customer[]
+  vehicles        Vehicle[]
+  bookings        Booking[]
+  rentalContracts RentalContract[]
+  settings        CompanySettings?
 
   @@map("companies")
 }
@@ -117,10 +119,11 @@ model Customer {
   updatedAt DateTime @updatedAt
 
   // Relations
-  company  Company?  @relation(fields: [companyId], references: [id])
-  invoices Invoice[]
-  payments Payment[]
-  bookings Booking[]
+  company         Company?         @relation(fields: [companyId], references: [id])
+  invoices        Invoice[]
+  payments        Payment[]
+  bookings        Booking[]
+  rentalContracts RentalContract[]
 
   @@index([email])
   @@index([emiratesId])
@@ -295,13 +298,14 @@ model Invoice {
   updatedAt     DateTime      @updatedAt
 
   // Relations
-  company     Company       @relation(fields: [companyId], references: [id])
-  customer    Customer      @relation(fields: [customerId], references: [id])
-  transaction Transaction   @relation(fields: [transactionId], references: [id])
-  createdBy   User          @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
-  items       InvoiceItem[]
-  payments    Payment[]
-  booking     Booking?
+  company        Company         @relation(fields: [companyId], references: [id])
+  customer       Customer        @relation(fields: [customerId], references: [id])
+  transaction    Transaction     @relation(fields: [transactionId], references: [id])
+  createdBy      User            @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  items          InvoiceItem[]
+  payments       Payment[]
+  booking        Booking?
+  rentalContract RentalContract?
 
   @@unique([companyId, invoiceNumber])
   @@index([companyId, customerId, status])
@@ -442,6 +446,13 @@ enum VehicleStatus {
   RETIRED
 }
 
+enum VehicleLockStatus {
+  AVAILABLE      // Vehicle is available for booking
+  TEMP_BOOKED    // Temporarily locked during booking stage
+  LOCKED         // Permanently locked (rental contract approved)
+  RENTED         // Currently rented out
+}
+
 model Vehicle {
   id          String  @id @default(uuid())
   companyId   String
@@ -465,8 +476,10 @@ model Vehicle {
   seats        Int? // Number of seats
 
   // Status and availability
-  status   VehicleStatus @default(AVAILABLE)
-  isBooked Boolean       @default(false) // Quick availability flag
+  status       VehicleStatus     @default(AVAILABLE)
+  lockStatus   VehicleLockStatus @default(AVAILABLE) // New locking status
+  isBooked     Boolean           @default(false) // Quick availability flag
+  tempLockedUntil DateTime?      // When temp lock expires (auto-release after expiry)
 
   imageUrl    String?
   description String?
@@ -475,21 +488,21 @@ model Vehicle {
   updatedAt   DateTime @updatedAt
 
   // Relations
-  company  Company   @relation(fields: [companyId], references: [id])
-  bookings Booking[]
+  company         Company          @relation(fields: [companyId], references: [id])
+  bookings        Booking[]
+  rentalContracts RentalContract[]
 
   @@index([companyId, status])
   @@index([make, model, year])
   @@index([status, isBooked]) // For availability queries
+  @@index([lockStatus, tempLockedUntil]) // For vehicle locking queries
   @@map("vehicles")
 }
 
 enum BookingStatus {
-  PENDING // Awaiting confirmation
-  CONFIRMED // Booking confirmed
-  ACTIVE // Vehicle picked up
-  COMPLETED // Vehicle returned
-  CANCELLED // Booking cancelled
+  PENDING   // Awaiting approval (temp vehicle lock active)
+  APPROVED  // Rental contract approved (permanent vehicle lock)
+  CANCELLED // Booking cancelled (vehicle auto-released)
 }
 
 model Booking {
@@ -510,6 +523,14 @@ model Booking {
   totalAmount    Decimal       @db.Decimal(15, 2) // Calculated total
   status         BookingStatus @default(PENDING)
 
+  // Vehicle assignment and locking
+  assignedVehicleId String?   // Assigned vehicle (can be changed by sales agent)
+  lockedUntil       DateTime? // Temporary lock expiration (auto-release)
+
+  // Rental contract linking
+  rentalContractId     String? @unique // Link to RentalContract (when approved)
+  rentalContractNumber String? // Generated rental contract number
+
   // Location and logistics
   pickupLocation  String?
   dropoffLocation String?
@@ -523,16 +544,18 @@ model Booking {
   updatedAt DateTime @updatedAt
 
   // Relations
-  company  Company        @relation(fields: [companyId], references: [id])
-  vehicle  Vehicle        @relation(fields: [vehicleId], references: [id])
-  customer Customer       @relation(fields: [customerId], references: [id])
-  invoice  Invoice?       @relation(fields: [invoiceId], references: [id])
-  addOns   BookingAddOn[]
+  company        Company         @relation(fields: [companyId], references: [id])
+  vehicle        Vehicle         @relation(fields: [vehicleId], references: [id])
+  customer       Customer        @relation(fields: [customerId], references: [id])
+  invoice        Invoice?        @relation(fields: [invoiceId], references: [id])
+  rentalContract RentalContract? @relation(fields: [rentalContractId], references: [id])
+  addOns         BookingAddOn[]
 
   @@unique([companyId, bookingNumber])
   @@index([vehicleId, startDate, endDate])
   @@index([customerId])
   @@index([status])
+  @@index([lockedUntil]) // For auto-release queries
   @@map("bookings")
 }
 
@@ -631,4 +654,146 @@ model IssueComment {
 
   @@index([issueId, createdAt])
   @@map("issue_comments")
+}
+
+// ============================================
+// RENTAL CONTRACT SYSTEM
+// ============================================
+
+enum RentalContractStatus {
+  DRAFT      // Contract being prepared
+  APPROVED   // Approved by sales agent
+  ACTIVE     // Vehicle picked up
+  COMPLETED  // Vehicle returned
+  CANCELLED  // Contract cancelled
+}
+
+model RentalContract {
+  id             String               @id @default(uuid())
+  companyId      String
+  contractNumber String               // RASMLY251200055 (format from sample)
+  bookingId      String               @unique // Link back to booking
+  customerId     String
+  vehicleId      String               // Final assigned vehicle
+  invoiceId      String?              @unique
+
+  // Contract details
+  status         RentalContractStatus @default(DRAFT)
+  branch         String?              // RAS AL KHOR, etc.
+  startDate      DateTime
+  endDate        DateTime
+
+  // Vehicle details (snapshot at contract time)
+  vehicleMake       String
+  vehicleModel      String
+  vehicleYear       Int
+  vehiclePlateNumber String
+  vehicleColor      String?
+
+  // Mileage tracking
+  outKm          Int?                 // Odometer reading at pickup
+  outFuel        String?              // Fuel level at pickup (e.g., "8/8")
+  outDate        DateTime?            // Actual pickup date/time
+  expectedInDate DateTime?            // Expected return date/time
+  inKm           Int?                 // Odometer reading at return
+  inFuel         String?              // Fuel level at return
+  inDate         DateTime?            // Actual return date/time
+
+  // Pricing (snapshot from booking)
+  rentAmount          Decimal  @db.Decimal(15, 2)
+  scdwAmount          Decimal  @default(0) @db.Decimal(15, 2) // Super CDW
+  taxAmount           Decimal  @default(0) @db.Decimal(15, 2)
+  totalCharges        Decimal  @db.Decimal(15, 2)
+  depositAmount       Decimal  @default(0) @db.Decimal(15, 2)
+  receivedAmount      Decimal  @default(0) @db.Decimal(15, 2)
+  balanceAmount       Decimal  @default(0) @db.Decimal(15, 2)
+
+  // Additional charges (tracked separately)
+  fuelCharges        Decimal  @default(0) @db.Decimal(15, 2)
+  mileageCharges     Decimal  @default(0) @db.Decimal(15, 2)
+  finesCharges       Decimal  @default(0) @db.Decimal(15, 2)
+  damageCharges      Decimal  @default(0) @db.Decimal(15, 2)
+  otherCharges       Decimal  @default(0) @db.Decimal(15, 2)
+
+  // Customer details (snapshot at contract time)
+  customerName           String
+  customerNationality    String?
+  customerPassportNo     String?
+  customerLicenseNo      String?
+  customerMobile         String?
+  customerEmail          String?
+  customerAddress        String?
+
+  // Driver details (can be same as customer)
+  driverName         String?
+  driverNationality  String?
+  driverPassportNo   String?
+  driverLicenseNo    String?
+
+  // Contract terms
+  insuranceType      String?              // Basic, Full, SCDW
+  termsAccepted      Boolean  @default(false)
+
+  // Document generation
+  pdfUrl             String?              // Generated PDF URL
+  printedAt          DateTime?            // When contract was printed
+
+  notes              String?
+  createdById        String?              // Sales agent who created
+  approvedById       String?              // Sales agent who approved
+  approvedAt         DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  company  Company   @relation(fields: [companyId], references: [id])
+  customer Customer  @relation(fields: [customerId], references: [id])
+  vehicle  Vehicle   @relation(fields: [vehicleId], references: [id])
+  invoice  Invoice?  @relation(fields: [invoiceId], references: [id])
+  booking  Booking?
+
+  @@unique([companyId, contractNumber])
+  @@index([companyId, status])
+  @@index([customerId])
+  @@index([vehicleId])
+  @@index([startDate, endDate])
+  @@map("rental_contracts")
+}
+
+// ============================================
+// COMPANY SETTINGS
+// ============================================
+
+model CompanySettings {
+  id        String   @id @default(uuid())
+  companyId String   @unique
+
+  // Booking settings
+  tempLockDurationMinutes Int      @default(30) // Default 30 minutes
+  allowOverbooking        Boolean  @default(false)
+  autoAssignVehicle       Boolean  @default(true)
+
+  // Notification settings
+  sendBookingNotifications   Boolean @default(true)
+  sendContractNotifications  Boolean @default(true)
+  sendLockExpiryNotifications Boolean @default(true)
+  notificationEmail          String?
+  notificationPhone          String?
+
+  // Contract settings
+  contractPrefix          String  @default("RASMLY") // Prefix for contract numbers
+  requireDepositForBooking Boolean @default(true)
+  defaultDepositAmount     Decimal @default(0) @db.Decimal(15, 2)
+
+  // Auto-release settings
+  enableAutoRelease       Boolean @default(true)
+  autoReleaseCheckInterval Int    @default(5) // Minutes between checks
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@map("company_settings")
 }

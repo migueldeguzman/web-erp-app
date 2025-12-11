@@ -29,6 +29,7 @@ import paymentRoutes from './routes/payment.routes';
 import transactionRoutes from './routes/transaction.routes';
 import vehicleRoutes from './routes/vehicle.routes';
 import bookingRoutes from './routes/booking.routes';
+import rentalContractRoutes from './routes/rental-contract.routes';
 import internalRoutes from './routes/internal.routes';
 import userRoutes from './routes/user.routes';
 import adminRoutes from './routes/admin.routes';
@@ -211,6 +212,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/rental-contracts', rentalContractRoutes); // Rental contract management
 app.use('/api/internal', internalRoutes); // Internal routes (no JWT required)
 app.use('/api/users', userRoutes); // User management (ADMIN only)
 app.use('/api/admin', adminRoutes); // Admin dashboard (ADMIN only)
@@ -218,9 +220,20 @@ app.use('/api/admin', adminRoutes); // Admin dashboard (ADMIN only)
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
+// Import vehicle locking service for auto-release job
+import vehicleLockingService from './services/vehicle-locking.service';
+
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🗄️  Database: PostgreSQL`);
+
+  // Start auto-release background job
+  try {
+    await vehicleLockingService.startAutoReleaseJob();
+    console.log(`🔓 Vehicle auto-release job started`);
+  } catch (error) {
+    console.error('❌ Failed to start auto-release job:', error);
+  }
 });
